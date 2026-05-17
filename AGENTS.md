@@ -11,6 +11,7 @@
 
 - `OpenBus-Stride-API-Booklet-HE.html`
 - `open-bus-stride-hebrew-handbook-landscape.pdf`
+- - [data.gov.il — מאגר נתוני תחבורה ציבורית](https://data.gov.il/he/datasets?query=%D7%AA%D7%97%D7%91%D7%95%D7%A8%D7%94+%D7%A6%D7%99%D7%91%D7%95%D7%A8%D7%99%D7%AA)
 
 החומרים מגדירים את מבנה ה־API, ההבחנה בין GTFS ל־SIRI, endpoints מרכזיים, מגבלות איכות, ומדדי KPI.
 
