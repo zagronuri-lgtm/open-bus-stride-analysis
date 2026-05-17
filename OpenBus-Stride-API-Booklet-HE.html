@@ -1,0 +1,339 @@
+<!DOCTYPE html><html lang="he" dir="rtl"><head><meta charset="UTF-8"><title>חוברת Open Bus Stride API</title><style>body{font-family:'Arial Hebrew','David',Arial,sans-serif;direction:rtl;text-align:right;max-width:880px;margin:30px auto;padding:0 20px;line-height:1.7;color:#1a1a1a;background:#fafafa}h1{color:#1a4480;border-bottom:3px solid #1a4480;padding-bottom:8px}h2{color:#1a4480;margin-top:35px;border-right:5px solid #1a4480;padding-right:10px}h3{color:#2c5aa0}code{background:#eef;padding:2px 6px;border-radius:3px;font-family:Menlo,Consolas,monospace;font-size:0.9em;direction:ltr;display:inline-block}pre{background:#1e1e1e;color:#eee;padding:14px;border-radius:6px;overflow-x:auto;direction:ltr;text-align:left;font-size:0.85em}table{border-collapse:collapse;width:100%;margin:14px 0;background:#fff}th,td{border:1px solid #ccc;padding:8px;text-align:right}th{background:#1a4480;color:#fff}blockquote{border-right:4px solid #1a4480;background:#eef;margin:14px 0;padding:8px 14px}.toc{background:#fff;border:1px solid #ddd;padding:14px 24px;border-radius:6px}.tag{display:inline-block;background:#1a4480;color:#fff;padding:2px 8px;border-radius:4px;font-size:0.85em;margin-left:6px}.warn{background:#fff3cd;border-right:4px solid #ffc107;padding:10px 14px;margin:10px 0;border-radius:4px}@media print{body{background:#fff}pre{background:#f4f4f4;color:#000;border:1px solid #ccc}}</style></head><body>
+<h1>🚌 חוברת הסברה מקיפה — Open Bus Stride API</h1>
+<p><strong>כלי עבודה לניתוח תחבורה ציבורית בישראל</strong> · עודכן: 17.5.2026</p>
+
+<div class="toc">
+<h3>📑 תוכן עניינים</h3>
+<ol>
+<li>מבוא — מהו פרויקט Stride ומי עומד מאחוריו</li>
+<li>ארכיטקטורת המידע — מ-SIRI ו-GTFS ועד ל-API</li>
+<li>מילון מונחים יסודי</li>
+<li>שלוש קטגוריות ה-API + אגרגציות</li>
+<li>מדריך מלא — endpoint-by-endpoint</li>
+<li>סכמות הנתונים (Data Model)</li>
+<li>דפוסי שאילתה מתקדמים</li>
+<li>דוגמאות שימוש מעשיות</li>
+<li>מקורות מידע משלימים</li>
+<li>רעיונות למחקר וניתוח</li>
+<li>אזהרות, מגבלות וטעויות נפוצות</li>
+<li>נספחים: Cheat Sheet, לינקים, מקורות, טיפים, תרגיל</li>
+</ol>
+</div>
+
+<h2>1. מבוא — מה זה Open Bus Stride?</h2>
+<p>Open Bus Stride הוא פרויקט של <strong>הסדנא לידע ציבורי</strong> (The Public Knowledge Workshop / hasadna) שמטרתו לספק נתונים שמישים ומדויקים על מערכת התחבורה הציבורית בישראל. הוא אוסף, מעבד ומפרסם שני סוגי מידע מרכזיים:</p>
+<ul>
+<li><strong>GTFS</strong> — לוחות הזמנים המתוכננים (Static).</li>
+<li><strong>SIRI</strong> — נתוני זמן־אמת על מיקומי אוטובוסים, נסיעות בפועל וסטיות מהמתוכנן (Real-Time).</li>
+</ul>
+<p>כתובות מרכזיות:</p>
+<ul>
+<li>Base URL: <code>https://open-bus-stride-api.hasadna.org.il/</code></li>
+<li>תיעוד Swagger אינטראקטיבי: <code>/docs</code></li>
+<li>מפרט OpenAPI גולמי: <code>/openapi.json</code></li>
+</ul>
+<blockquote>מצוטט מהדף: "We provide usable and accurate data about the Israeli public transportation system."</blockquote>
+
+<h2>2. ארכיטקטורת המידע</h2>
+<p>המערכת בנויה בארבע שכבות:</p>
+<p><strong>שכבה א' — מקורות גולמיים.</strong> משרד התחבורה מפרסם קובץ GTFS יומי (ZIP עם <code>agency.txt, routes.txt, trips.txt, stop_times.txt, stops.txt, calendar.txt, shapes.txt, translations.txt</code>) וכן זרם SIRI-SM ב-XML (פרוטוקול CEN/TS 15531 — Service Interface for Real-time Information). SIRI מספק Vehicle Monitoring, Stop Monitoring ו-Estimated Timetable.</p>
+<p><strong>שכבה ב' — ETL.</strong> תהליכי ה-ETL של Stride שולפים, פותחים, מנרמלים ושומרים ב-PostgreSQL. ה-SIRI נדגם בתדירות גבוהה ונשמר ב-snapshots (טבלת <code>siri_snapshots</code>).</p>
+<p><strong>שכבה ג' — מודל נתונים מובנה.</strong> טבלאות מרכזיות:</p>
+<ul>
+<li>צד מתוכנן: <code>gtfs_routes, gtfs_rides, gtfs_stops, gtfs_ride_stops, gtfs_agencies</code></li>
+<li>צד זמן־אמת: <code>siri_routes, siri_rides, siri_stops, siri_ride_stops, siri_vehicle_locations, siri_snapshots</code></li>
+<li>אגרגציה: <code>gtfs_rides_agg</code></li>
+</ul>
+<p><strong>שכבה ד' — ממשקים.</strong> REST API (הנושא שלנו), Python Client עם Jupyter Notebooks, וכן שאילתות SQL ישירות (לא חשוף לציבור).</p>
+<div class="warn">⚠ עיקרון יסוד שגיליתי בקוד: לכל <code>siri_ride</code> יש שלוש הצמדות אפשריות לנסיעה המתוכננת — <code>journey_gtfs_ride_id, route_gtfs_ride_id, gtfs_ride_id</code>. ההצמדה הסופית (<code>gtfs_ride_id</code>) היא היוריסטיקה משוקללת. זו נקודה קריטית בכל ניתוח דיוק.</div>
+
+<h2>3. מילון מונחים — חובה לשנן</h2>
+<table>
+<tr><th>מונח</th><th>הסבר</th></tr>
+<tr><td><code>line_ref</code></td><td>מזהה ייחודי של קו (לאו דווקא "מספר הקו" הציבורי). מספר שלם, עשוי להשתנות בין פרסומי GTFS.</td></tr>
+<tr><td><code>operator_ref</code></td><td>מזהה המפעיל. אגד=3, דן=5, מטרופולין=15, קווים=18, סופרבוס=16. רשימה מלאה אצל משרד התחבורה.</td></tr>
+<tr><td><code>route_short_name</code></td><td>מספר הקו כפי שמוצג לציבור ("18", "947").</td></tr>
+<tr><td><code>route_long_name</code></td><td>תיאור מילולי: מוצא ← יעד.</td></tr>
+<tr><td><code>route_mkt</code></td><td>קוד הקו ה"מק"טי" (Marketing Key) — מזהה יציב לאורך זמן יותר מ-line_ref.</td></tr>
+<tr><td><code>route_direction</code></td><td>כיוון: 1=הלוך, 2=חזור, 3=מעגלי.</td></tr>
+<tr><td><code>route_alternative</code></td><td>חלופה (#, 1, א, ב…).</td></tr>
+<tr><td><code>route_type</code></td><td>סוג כלי תחבורה: 3=אוטובוס, 0=טראם/קלה, 2=רכבת, 715=Demand-Response.</td></tr>
+<tr><td><code>journey_ref</code></td><td>מזהה ייחודי של נסיעה ספציפית (יום+שעה+קו).</td></tr>
+<tr><td><code>vehicle_ref</code></td><td>מספר רישוי האוטובוס המבצע.</td></tr>
+<tr><td><code>siri_snapshot</code></td><td>דגימה אחת של זרם ה-SIRI (פולינג כל ~20–60 שניות).</td></tr>
+<tr><td><code>stop_sequence</code></td><td>סדר התחנה בנסיעה.</td></tr>
+<tr><td><code>pickup_type / drop_off_type</code></td><td>0=כן, 1=לא, 2=לפי תיאום.</td></tr>
+<tr><td><code>bearing</code></td><td>כיוון התנועה במעלות (0–360).</td></tr>
+<tr><td><code>velocity</code></td><td>מהירות כלי הרכב.</td></tr>
+<tr><td><code>distance_from_journey_start</code></td><td>מטרים מתחילת המסלול לפי shape.</td></tr>
+<tr><td><code>distance_from_siri_ride_stop_meters</code></td><td>מרחק מהתחנה הקרובה ביותר ברגע הדגימה.</td></tr>
+</table>
+
+<h2>4. שלוש קטגוריות + אגרגציות</h2>
+<p><span class="tag">user cases</span> גישה מהירה לתרחישי שימוש נפוצים: <code>/route_timetable/list</code>, <code>/stop_arrivals/list</code>, <code>/rides_execution/list</code>.</p>
+<p><span class="tag">siri</span> זמן־אמת: <code>siri_routes, siri_rides, siri_stops, siri_ride_stops, siri_vehicle_locations, siri_snapshots, siri_velocity_aggregation</code>.</p>
+<p><span class="tag">gtfs</span> מתוכנן: <code>gtfs_routes, gtfs_stops, gtfs_rides, gtfs_agencies, gtfs_ride_stops</code>.</p>
+<p><span class="tag">aggregations</span> <code>gtfs_rides_agg/list</code> ו-<code>gtfs_rides_agg/group_by</code>.</p>
+<p>לכל ישות עם רשימה יש לרוב גם <code>/get</code> שמחזיר רשומה לפי <code>id</code>.</p>
+
+<h2>5. מדריך מלא לכל ה-endpoints</h2>
+
+<h3>5.1 user cases</h3>
+
+<p><strong><code>GET /route_timetable/list</code></strong> — לוח זמנים של קו לחלון תאריכים נתון.<br>
+פרמטרים: <code>limit, offset, get_count, planned_start_time_date_from, planned_start_time_date_to, line_refs</code>.<br>
+שדות (<code>RouteTimetablePydanticModel</code>): <code>id, name, city, lon, lat, planned_arrival_time, gtfs_line_ref, gtfs_line_start_time, gtfs_ride_id</code>.<br>
+שימוש: מתי קו 18 אמור להגיע לכל תחנה ביום נתון.</p>
+
+<p><strong><code>GET /stop_arrivals/list</code></strong> — הגעות בפועל לתחנה.<br>
+פרמטרים: <code>limit, offset, get_count, gtfs_stop_id, gtfs_ride_ids</code>.<br>
+שדות (<code>StopArrivalPydanticModel</code>): <code>actual_arrival_time</code>. במציאות join בין siri_ride_stops ל-siri_vehicle_locations.<br>
+שימוש: ניתוח דיוק קווים בתחנה ספציפית.</p>
+
+<p><strong><code>GET /rides_execution/list</code></strong> — תמונה משולבת מתוכנן מול בפועל.<br>
+פרמטרים: <code>limit, offset, get_count, date_from, date_to, operator_ref, line_ref</code>.<br>
+שדות (<code>RideExecutionPydanticModel</code>): <code>planned_start_time, actual_start_time, gtfs_ride_id</code>.<br>
+שימוש: כמה נסיעות יצאו בזמן? כמה לא יצאו כלל (פאנטום)?</p>
+
+<h3>5.2 SIRI — זמן־אמת</h3>
+
+<p><strong><code>GET /siri_routes/list</code></strong> + <code>/get</code> — קווים שנצפו בזרם SIRI.<br>
+פרמטרים: <code>limit, offset, get_count, line_refs, operator_refs, order_by</code>.<br>
+שדות: <code>id, line_ref, operator_ref</code>.</p>
+
+<p><strong><code>GET /siri_rides/list</code></strong> + <code>/get</code> — נסיעות בודדות שהתבצעו בפועל. ה-endpoint העשיר ביותר.<br>
+פרמטרים: <code>limit, offset, get_count,
+gtfs_route__date_from, gtfs_route__date_to,
+gtfs_route__line_refs, gtfs_route__operator_refs,
+gtfs_route__route_short_name, gtfs_route__route_long_name_contains,
+gtfs_route__route_mkt, gtfs_route__route_direction,
+gtfs_route__route_alternative, gtfs_route__agency_name,
+gtfs_route__route_type,
+gtfs_ride__gtfs_route_id, gtfs_ride__journey_ref_prefix,
+gtfs_ride__start_time_from, gtfs_ride__start_time_to,
+siri_route_ids, siri_route__line_refs, siri_route__operator_refs,
+journey_ref_prefix, journey_refs, vehicle_refs,
+scheduled_start_time_from, scheduled_start_time_to, order_by</code>.<br>
+שדות: <code>id, siri_route_id, journey_ref, scheduled_start_time, vehicle_ref, updated_first_last_vehicle_locations, first_vehicle_location_id, last_vehicle_location_id, updated_duration_minutes, duration_minutes, journey_gtfs_ride_id, route_gtfs_ride_id, gtfs_ride_id</code>. גרסת <code>WithRelated</code> מרחיבה ל-siri_route__* ו-gtfs_route__*.</p>
+
+<p><strong><code>GET /siri_stops/list</code></strong> + <code>/get</code> — תחנות שנצפו ב-SIRI. שדות: <code>id, code</code>. <code>code</code> מצטלב עם <code>gtfs_stops.code</code>.</p>
+
+<p><strong><code>GET /siri_ride_stops/list</code></strong> + <code>/get</code> — קישור נסיעת-SIRI ↔ תחנת-SIRI עם המיקום הקרוב.<br>
+פרמטרים: <code>siri_stop_ids, siri_ride_ids, siri_vehicle_location__lon/lat__greater_or_equal/lower_or_equal, siri_vehicle_location__recorded_at_time_from/to, siri_ride__scheduled_start_time_from/to</code> ועוד.<br>
+שדות: <code>id, siri_stop_id, siri_ride_id, order, gtfs_stop_id, nearest_siri_vehicle_location_id</code>.</p>
+
+<p><strong><code>GET /siri_vehicle_locations/list</code></strong> + <code>/get</code> — דגימות מיקום של אוטובוסים. הלב של ה-API.<br>
+פרמטרים: <code>siri_vehicle_location_ids, siri_snapshot_ids, siri_ride_stop_ids, recorded_at_time_from/to, lon__greater_or_equal/lower_or_equal, lat__greater_or_equal/lower_or_equal, siri_routes__line_ref, siri_ride__vehicle_ref, siri_routes__operator_ref, siri_rides__schedualed_start_time_from/to, siri_rides__ids, siri_routes__ids, order_by</code>.<br>
+שדות: <code>id, siri_snapshot_id, siri_ride_stop_id, recorded_at_time, lon, lat, bearing, velocity, distance_from_journey_start, distance_from_siri_ride_stop_meters</code>.</p>
+<div class="warn">⚠ <strong>מלכודת איות:</strong> השרת מצפה ל-<code>schedualed</code> (a-u-a) ולא <code>scheduled</code>. כתיב שגוי קיים רק כאן — חובה לשמור עליו או לקבל 422.</div>
+
+<p><strong><code>GET /siri_snapshots/list</code></strong> + <code>/get</code> — מטא־דאטה על ה-ETL.<br>
+פרמטרים: <code>snapshot_id_prefix, order_by</code>.<br>
+שדות: <code>id, snapshot_id, etl_status, etl_start_time, etl_end_time, error, num_successful_parse_vehicle_locations, num_failed_parse_vehicle_locations, num_added_siri_rides, num_added_siri_ride_stops, num_added_siri_routes, num_added_siri_stops, last_heartbeat, created_by</code>.</p>
+
+<p><strong><code>GET /siri_velocity_aggregation/siri_velocity_aggregation</code></strong> — מהירויות ממוצעות לפי גריד גיאוגרפי.<br>
+פרמטרים: <code>recorded_from, lon_min, lon_max, lat_min, lat_max, rounding_precision</code>.<br>
+שדות: <code>rounded_lon, rounded_lat, total_sample_count, average_rolling_avg, stddev_rolling_avg</code>. מצוין למפות חום של פקקים.</p>
+
+<h3>5.3 GTFS — לוחות זמנים מתוכננים</h3>
+
+<p><strong><code>GET /gtfs_routes/list</code></strong> + <code>/get</code> — קווים יומיים (כל פרסום יוצר רשומות חדשות).<br>
+פרמטרים: <code>date_from, date_to, line_refs, operator_refs, route_short_name, route_long_name_contains, route_mkt, route_direction, route_alternative, agency_name, route_type, order_by</code>.<br>
+שדות: <code>id, date, line_ref, operator_ref, route_short_name, route_long_name, route_mkt, route_direction, route_alternative, agency_name, route_type</code>.</p>
+
+<p><strong><code>GET /gtfs_stops/list</code></strong> + <code>/get</code> — תחנות יומיות.<br>
+פרמטרים: <code>date_from, date_to, code, city</code>. שדות: <code>id, date, code, lat, lon, name, city</code>.</p>
+
+<p><strong><code>GET /gtfs_rides/list</code></strong> + <code>/get</code> — נסיעות מתוכננות.<br>
+פרמטרים: <code>gtfs_route_id, journey_ref_prefix, start_time_from/to</code> + כל <code>gtfs_route__*</code>.<br>
+שדות: <code>id, gtfs_route_id, journey_ref, start_time, end_time</code>.</p>
+
+<p><strong><code>GET /gtfs_agencies/list</code></strong> — סוכנויות לפי יום. שדות: <code>date, operator_ref, agency_name</code>.</p>
+
+<p><strong><code>GET /gtfs_ride_stops/list</code></strong> + <code>/get</code> — לוז עצירות מתוכנן.<br>
+פרמטרים: <code>arrival_time_from/to</code> ועוד.<br>
+שדות: <code>id, gtfs_stop_id, gtfs_ride_id, arrival_time, departure_time, stop_sequence, pickup_type, drop_off_type, shape_dist_traveled</code>.</p>
+
+<h3>5.4 Aggregations</h3>
+
+<p><strong><code>GET /gtfs_rides_agg/list</code></strong> — מצרף יומי+שעתי+מפעיל.<br>
+פרמטרים: <code>date_from, date_to, exclude_hours_from, exclude_hours_to</code>.<br>
+שדות: <code>gtfs_route_id, gtfs_route_hour, num_planned_rides, num_actual_rides, operator_ref</code>.</p>
+
+<p><strong><code>GET /gtfs_rides_agg/group_by</code></strong> — אגרגציה דינמית.<br>
+פרמטר חובה: <code>group_by</code>. <strong>ערכים חוקיים:</strong> <code>gtfs_route_date, gtfs_route_hour, operator_ref, day_of_week, line_ref</code>.<br>
+שדות חוזרים: <code>gtfs_route_date, gtfs_route_hour, operator_ref, day_of_week, line_ref, route_short_name, route_long_name, total_routes, total_planned_rides, total_actual_rides</code>.</p>
+
+<h2>6. סכמות הנתונים (Data Model)</h2>
+<p>טבלת הליבה היא <code>siri_vehicle_locations</code> (~עשרות מיליוני שורות ביום). השדות <code>first_vehicle_location_id</code> ו-<code>last_vehicle_location_id</code> ב-<code>siri_rides</code> מאפשרים קפיצה ישירה לתחילת/סוף הנסיעה ללא סריקה מלאה.</p>
+<p>סכמות זמינות במלואן ב-API:</p>
+<ul>
+<li>GtfsAgencyPydanticModel, GtfsRidePydanticModel, GtfsRideStopPydanticModel, GtfsRideStopWithRelatedPydanticModel</li>
+<li>GtfsRideWithRelatedPydanticModel, GtfsRidesAggGroupByPydanticModel, GtfsRidesAggPydanticModel</li>
+<li>GtfsRoutePydanticModel, GtfsStopPydanticModel</li>
+<li>SiriRidePydanticModel, SiriRideStopPydanticModel, SiriRideStopWithRelatedPydanticModel</li>
+<li>SiriRideWithRelatedPydanticModel, SiriRoutePydanticModel</li>
+<li>SiriSnapshotEtlStatusEnum, SiriSnapshotPydanticModel</li>
+<li>SiriStopPydanticModel, SiriVehicleLocationPydanticModel, SiriVehicleLocationWithRelatedPydanticModel</li>
+<li>SiriVelocityAggregationPydanticModel, StopArrivalPydanticModel</li>
+<li>RideExecutionPydanticModel, RouteTimetablePydanticModel</li>
+<li>HTTPValidationError, ValidationError</li>
+</ul>
+
+<h2>7. דפוסי שאילתה מתקדמים</h2>
+<p><strong>מגבלת ברירת מחדל:</strong> 100 תוצאות. ניתן להעלות עד 500,000.</p>
+<p><strong>שני מצבים לתוצאות גדולות:</strong></p>
+<ol>
+<li>HTTP Streaming עם <code>limit=-1</code> ופענוח JSON זורם. ה-Python Client של Stride מספק <code>iterate(...)</code>.</li>
+<li><code>limit</code>/<code>offset</code> ל-pagination — פחות מדויק כי הנתונים עשויים להשתנות בין בקשות.</li>
+</ol>
+<p><strong>get_count:</strong> <code>?get_count=true</code> מחזיר רק את הספירה (מתעלם מ-limit/offset/order).</p>
+<p><strong>order_by:</strong> רשימה מופרדת בפסיקים — <code>order_by=scheduled_start_time desc,id asc</code>.</p>
+<p><strong>טווחי תאריך וזמן:</strong> <code>*_from</code>/<code>*_to</code> כמעט בכל endpoint. תאריך: <code>YYYY-MM-DD</code>; חותמת זמן: ISO-8601 עם <code>Z</code> (UTC).</p>
+<p><strong>רשימות מופרדות בפסיקים:</strong> <code>line_refs=12345,67890&amp;operator_refs=3,5</code>.</p>
+<p><strong>Bounding Box גיאוגרפי:</strong> <code>lon__greater_or_equal, lon__lower_or_equal, lat__greater_or_equal, lat__lower_or_equal</code>.</p>
+<p><strong>חיפוש בשם הקו:</strong> <code>gtfs_route__route_long_name_contains=...</code> (substring רגיש לרישיות).</p>
+<p><strong>Filter Pivot חכם:</strong> ב-<code>siri_vehicle_locations/list</code> אפשר לעלות 3 רמות join (<code>siri_rides__, siri_routes__, siri_ride_stop_ids</code>) ולקבל מיקומים מסוננים לפי קו וגיאוגרפיה במכה אחת.</p>
+
+<h2>8. דוגמאות שימוש מעשיות</h2>
+
+<p><strong>דוגמה 1 — כל הנסיעות של קו 480 (אגד) ב-15.5.2026:</strong></p>
+<pre>GET https://open-bus-stride-api.hasadna.org.il/siri_rides/list?
+    gtfs_route__date_from=2026-05-15&amp;
+    gtfs_route__date_to=2026-05-15&amp;
+    gtfs_route__route_short_name=480&amp;
+    gtfs_route__operator_refs=3&amp;
+    limit=500</pre>
+
+<p><strong>דוגמה 2 — מפת חום של מהירויות בגוש דן ב-08:00–09:00:</strong></p>
+<pre>GET /siri_velocity_aggregation/siri_velocity_aggregation?
+    recorded_from=2026-05-15T08:00:00Z&amp;
+    lon_min=34.7&amp;lon_max=34.9&amp;
+    lat_min=32.05&amp;lat_max=32.15&amp;
+    rounding_precision=3</pre>
+
+<p><strong>דוגמה 3 — אחוז ביצוע יומי לפי יום־בשבוע:</strong></p>
+<pre>GET /gtfs_rides_agg/group_by?
+    date_from=2026-01-01&amp;date_to=2026-04-30&amp;
+    group_by=day_of_week,operator_ref</pre>
+<p>ואז: <code>total_actual_rides / total_planned_rides</code>.</p>
+
+<p><strong>דוגמה 4 — Python Client (סטרימינג):</strong></p>
+<pre>from open_bus_stride_client import api
+
+for ride in api.iterate('siri_rides/list',
+                        gtfs_route__date_from='2026-05-15',
+                        gtfs_route__route_short_name='18',
+                        gtfs_route__operator_refs='3',
+                        limit=-1):
+    print(ride['journey_ref'], ride['duration_minutes'])</pre>
+
+<p><strong>דוגמה 5 — איתור "פאנטום rides" (נסיעות שלא יצאו):</strong> כל <code>gtfs_rides</code> ביום X שאין להן אף <code>siri_rides</code> עם <code>gtfs_ride_id</code> המצביע עליהן. אפשר לחשב מ-<code>num_planned_rides − num_actual_rides</code> ב-<code>gtfs_rides_agg</code>.</p>
+
+<h2>9. מקורות מידע משלימים</h2>
+<p><strong>data.gov.il</strong> — פורטל הנתונים הפתוחים הממשלתי. תחת תגית "תחבורה" יש מאגרים כמו:</p>
+<ul>
+<li>רשימת מפעילים בתחבורה הציבורית (קוד מפעיל, שם)</li>
+<li>רשימת קווים פעילים (קוד קו ארצי + מק"ט)</li>
+<li>רישוי כלי רכב — לצימוד <code>vehicle_ref</code> למודל, גיל ותקן זיהום</li>
+<li>תאונות דרכים — למ"ס/CBS — להצלבה עם נתוני קווים</li>
+<li>חניוני "חנה וסע", רשימת תחנות מוניות שירות</li>
+</ul>
+<p><strong>GTFS-MOT</strong> — <code>https://gtfs.mot.gov.il/gtfsfiles/israel-public-transportation.zip</code> — קובץ ה-GTFS הרשמי, מתפרסם יומית (~150MB). מכיל גם <code>translations.txt</code> עם תרגומי שמות לאנגלית וערבית.</p>
+<p><strong>Tariff.zip</strong> — <code>https://gtfs.mot.gov.il/gtfsfiles/Tariff.zip</code> — מבנה תעריפים (אזורים, רב־קו).</p>
+<p><strong>SIRI-SM</strong> — זרם ה-XML החי של משרד התחבורה. גישה דורשת הרשמה כמפתח.</p>
+<p><strong>פורטל המפתחים של משרד התחבורה</strong> — <code>https://www.gov.il/he/departments/general/pt_developer_info</code> — מילון שדות, קודי שגיאה, ותנאי שימוש.</p>
+<p><strong>הסדנא לידע ציבורי ב-GitHub</strong> — <code>github.com/hasadna/open-bus</code>, <code>open-bus-stride-db</code>, <code>open-bus-stride-etl</code>, <code>open-bus-stride-api</code>, <code>open-bus-stride-client</code>, <code>open-bus-pipelines</code>. כל הקוד פתוח.</p>
+<p><strong>Jupyter Notebooks לדוגמה</strong> — כלולים ב-<code>open-bus-stride-client/README.md</code>.</p>
+<p><strong>מקורות נוספים</strong>: עמותת "15 דקות", פרויקט "אתחיל לעבוד מהיום", Citymapper Mobility Index, Moovit Insights, OpenStreetMap Israel, Lamas/CBS (תאונות, יוממות).</p>
+
+<h2>10. רעיונות לשאלות מחקר</h2>
+<ul>
+<li>מהי תדירות "פאנטום rides" לפי מפעיל בכל יום בשבוע?</li>
+<li>איך משתנה זמן ההגעה הממוצע של קו ספציפי בין שעות שיא לשעות שפל?</li>
+<li>מהן נקודות הצוואר־בקבוק המהירותיות במפת החום של גוש דן?</li>
+<li>כמה אוטובוסים שונים (vehicle_ref ייחודיים) פעילים בשיא יום חול לעומת שישי?</li>
+<li>קורלציה בין מזג אוויר ל-<code>stddev_rolling_avg</code> של מהירויות?</li>
+<li>"Early departures" — <code>actual_start_time &lt; planned_start_time − N דקות</code>, לפי קו ולפי שעה.</li>
+<li>מדד "אמינות קו" (Reliability Index) — שילוב אחוז יציאה, סטיית תקן בהגעה לתחנה, שיעור ביטולים.</li>
+</ul>
+
+<h2>11. אזהרות, מגבלות וטעויות נפוצות</h2>
+<div class="warn"><strong>טעות הקלדה רשמית ב-API:</strong> בפרמטרים של <code>/siri_vehicle_locations/list</code> מופיע <code>siri_rides__schedualed_start_time_from/to</code> (a-u-a). חובה להעתיק את האיות השגוי, אחרת תקבלו 422.</div>
+<div class="warn"><strong>line_ref vs route_mkt:</strong> <code>line_ref</code> משתנה בין פרסומי GTFS. למעקב אורך־טווח השתמשו ב-<code>route_mkt</code>.</div>
+<div class="warn"><strong>שלוש הצמדות gtfs_ride_id:</strong> אם <code>journey_gtfs_ride_id, route_gtfs_ride_id, gtfs_ride_id</code> לא זהות — סימן אזהרה לאיכות.</div>
+<div class="warn"><strong>limit ברירת מחדל 100:</strong> שכחת limit תיתן רק 100 שורות בלי אזהרה. לעבודה רצינית: <code>limit=-1</code> + streaming.</div>
+<div class="warn"><strong>SIRI לא מכסה הכל:</strong> אוטובוסים עם AVL תקול, רכבות, מוניות שירות, מפעילים קטנים — לא תמיד מדווחים. <code>num_actual_rides=0</code> לא בהכרח אומר "לא יצא".</div>
+<div class="warn"><strong>UTC:</strong> כל הזמנים בשרת הם UTC. ישראל = UTC+2 (חורף) או UTC+3 (קיץ).</div>
+<div class="warn"><strong>גריד מהירויות:</strong> <code>precision=3</code> ≈ 100 מטר; <code>precision=4</code> ≈ 10 מטר אך הרבה פחות דגימות בתא.</div>
+<div class="warn"><strong>יציבות id:</strong> ה-id המספרי עלול להשתנות בריבילדים. אחסנו את הצירוף הלוגי (line_ref + date + journey_ref) ולא את ה-id.</div>
+<div class="warn"><strong>עומס:</strong> הצוות מבקש מפורשות להגביל שאילתות. שאילתה רחבה ללא טווחי תאריך = לא חברי.</div>
+<div class="warn"><strong>שגיאת 422:</strong> תקבלו מערך <code>detail</code> עם <code>loc, msg, type</code>. ה-<code>loc</code> יציין את שם הפרמטר הבעייתי.</div>
+
+<h2>📎 נספח א' — מפתחות הצלבה בין הטבלאות</h2>
+<table>
+<tr><th>מ-טבלה</th><th>אל טבלה</th><th>מפתח</th></tr>
+<tr><td>siri_rides</td><td>siri_routes</td><td>siri_route_id → siri_routes.id</td></tr>
+<tr><td>siri_rides</td><td>gtfs_rides</td><td>gtfs_ride_id (לאחר היוריסטיקה)</td></tr>
+<tr><td>siri_ride_stops</td><td>siri_rides</td><td>siri_ride_id</td></tr>
+<tr><td>siri_ride_stops</td><td>siri_stops</td><td>siri_stop_id</td></tr>
+<tr><td>siri_ride_stops</td><td>gtfs_stops</td><td>gtfs_stop_id</td></tr>
+<tr><td>siri_ride_stops</td><td>siri_vehicle_locations</td><td>nearest_siri_vehicle_location_id</td></tr>
+<tr><td>siri_vehicle_locations</td><td>siri_snapshots</td><td>siri_snapshot_id</td></tr>
+<tr><td>gtfs_rides</td><td>gtfs_routes</td><td>gtfs_route_id</td></tr>
+<tr><td>gtfs_ride_stops</td><td>gtfs_rides</td><td>gtfs_ride_id</td></tr>
+<tr><td>gtfs_ride_stops</td><td>gtfs_stops</td><td>gtfs_stop_id</td></tr>
+<tr><td>gtfs_routes (cross-day)</td><td>gtfs_routes</td><td>route_mkt + route_direction + route_alternative</td></tr>
+<tr><td>GTFS ↔ SIRI על תחנה</td><td colspan="2">gtfs_stops.code = siri_stops.code</td></tr>
+</table>
+
+<h2>📎 נספח ב' — לינקים חיצוניים שמוזכרים בדף ה-Swagger</h2>
+<ol>
+<li><strong>STRIDE.md</strong> — <code>https://github.com/hasadna/open-bus-pipelines/blob/main/STRIDE.md</code> — סקירה ראשית של המערכת, מודלים, ETL וממשקים.</li>
+<li><strong>Jupyter Notebooks</strong> — <code>https://github.com/hasadna/open-bus-stride-client/blob/main/README.md#using-the-interactive-jupyter-notebooks</code></li>
+<li><strong>פתיחת קריאה (Issues)</strong> — <code>https://github.com/hasadna/open-bus/issues/new</code></li>
+<li><strong>Stride Python Client</strong> — <code>pip install open-bus-stride-client</code> · ריפו: <code>github.com/hasadna/open-bus-stride-client</code></li>
+<li><strong>Open Bus Stride Data Model</strong> — תיעוד מודל בריפו <code>open-bus-stride-db</code></li>
+<li><strong>Open Bus Stride ETL Processes</strong> — בריפו <code>open-bus-stride-etl</code></li>
+<li><strong>MOT Developer Information</strong> — <code>https://www.gov.il/he/departments/general/pt_developer_info</code></li>
+<li><strong>openapi.json</strong> — <code>https://open-bus-stride-api.hasadna.org.il/openapi.json</code> — ייבוא ישיר ל-Postman/Insomnia.</li>
+</ol>
+
+<h2>📎 נספח ג' — מקורות משלימים חיצוניים</h2>
+<ul>
+<li><strong>GTFS רשמי</strong> — <code>https://gtfs.mot.gov.il/gtfsfiles/israel-public-transportation.zip</code></li>
+<li><strong>Tariff.zip</strong> — <code>https://gtfs.mot.gov.il/gtfsfiles/Tariff.zip</code></li>
+<li><strong>data.gov.il</strong> — פורטל הנתונים הפתוחים הממשלתי</li>
+<li><strong>הסדנא לידע ציבורי</strong> — <code>https://www.hasadna.org.il/</code></li>
+<li><strong>ערוץ Slack #open-bus</strong> — קישור הרשמה ב-STRIDE.md</li>
+<li><strong>OpenStreetMap Israel</strong></li>
+<li><strong>Lamas (CBS)</strong> — תאונות דרכים, יוממות</li>
+<li><strong>עמותת "15 דקות"</strong></li>
+<li><strong>Moovit Public Transport Index</strong></li>
+</ul>
+
+<h2>📎 נספח ד' — טיפים לביצועי שאילתה</h2>
+<ul>
+<li>צמצמו תמיד טווח תאריכים לחלון המינימלי הנדרש</li>
+<li>השתמשו ב-<code>get_count=true</code> קודם לבחינת היקף</li>
+<li>עדיפו <code>gtfs_rides_agg</code> על חישוב ידני מ-<code>siri_rides</code> לאגרגציות גדולות</li>
+<li>השתמשו ב-<code>order_by=id asc</code> ל-pagination יציב</li>
+<li>עם <code>limit=-1</code> חובה streaming decoder (לא <code>response.json()</code>)</li>
+<li>מטמנו לוקאלית — אותו <code>gtfs_route_id</code> ביום נתון לא ישתנה</li>
+</ul>
+
+<h2>📎 נספח ה' — תרגיל לסיכום (לשינון)</h2>
+<ol>
+<li>מה ההבדל בין <code>line_ref</code>, <code>route_mkt</code>, ו-<code>route_short_name</code>?</li>
+<li>מהם השדות החוזרים מ-<code>/siri_velocity_aggregation</code>?</li>
+<li>למה צריך לשלוח <code>limit=-1</code> ולא להסתפק ב-100?</li>
+<li>אילו ערכים חוקיים יש ל-<code>group_by</code> ב-<code>gtfs_rides_agg/group_by</code>?</li>
+<li>איך מאתרים נסיעה שלא יצאה (פאנטום)?</li>
+<li>למה הפרמטר נכתב <code>schedualed</code> ולא <code>scheduled</code>?</li>
+<li>מהי הסיבה לקיומן של שלוש הצמדות שונות ל-<code>gtfs_ride_id</code> ב-<code>siri_rides</code>?</li>
+<li>איזה שדה ב-<code>siri_vehicle_locations</code> אומר לכם כמה רחוק האוטובוס מהתחנה הקרובה?</li>
+</ol>
+
+<hr>
+<p style="text-align:center;color:#888;margin-top:40px">סוף החוברת · נוצר במהלך מחקר אוטומטי על Open Bus Stride API · הסדנא לידע ציבורי</p>
+</body></html>
