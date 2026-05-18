@@ -8,6 +8,9 @@
 - `skills/open-bus-transit-analysis/SKILL.md` — Skill ייעודי לניתוח תחבורה ציבורית בישראל.
 - `docs/` — שתי חוברות העבודה שהועלו: HTML + PDF.
 - `src/open_bus_stride_client.py` — לקוח Python בסיסי ובטוח ל־Open Bus Stride API.
+- `src/line_reliability_analyzer.py` — כלי אמינות קו מוקשח עם בדיקות איכות לפני KPI.
+- `src/endpoint_catalog.py` — יצירת קטלוג endpoints מתוך `openapi.json` חי.
+- `src/rtl_dashboard.py` — יצירת דשבורד HTML יחיד בעברית RTL מקובץ reliability CSV.
 - `prompts/` — משימות מוכנות להרצה ב־Codex.
 - `tests/` — בדיקות בסיסיות ללא קריאה לרשת.
 
@@ -27,6 +30,69 @@ source .venv/bin/activate
 pip install -r requirements.txt
 pytest
 ```
+
+## יצירת קטלוג Endpoints
+
+הסקריפט מוריד את `openapi.json` החי של Open Bus Stride ומייצר שלושה קבצים:
+
+```bash
+python -m src.endpoint_catalog \
+  --openapi-url https://open-bus-stride-api.hasadna.org.il/openapi.json \
+  --output-dir docs
+```
+
+פלט צפוי:
+
+- `docs/endpoint_catalog.csv`
+- `docs/endpoint_catalog.md`
+- `docs/endpoint_catalog.html`
+
+כל רשומה כוללת: group, method, path, required params, optional params, response schema, and analyst use case.
+
+## ניתוח אמינות קו
+
+הכלי מריץ planned vs actual לפי `service_date`, `operator_ref` ו־`line_ref`, ומחזיר CSV + HTML RTL עם KPI, בדיקות איכות, ומטא־דאטה לשחזור. אם לא מספקים `line_ref`, הזיהוי חייב להיות חד־משמעי לאחר סינון לפי `route_mkt`, `route_direction` ו־`route_alternative`; אחרת הריצה תיעצר עם רשימת מועמדים במקום לבחור אוטומטית.
+
+פקודת דוגמה עם `line_ref` מפורש:
+
+```bash
+python -m src.line_reliability_analyzer \
+  --service-date 2026-05-15 \
+  --operator-ref 3 \
+  --route-short-name 18 \
+  --line-ref 3644 \
+  --hour-from 5 \
+  --hour-to 10 \
+  --output-dir outputs
+```
+
+פקודת דוגמה לזיהוי לפי מאפייני קו, כאשר אין `line_ref` ידוע מראש:
+
+```bash
+python -m src.line_reliability_analyzer \
+  --service-date 2026-05-15 \
+  --operator-ref 3 \
+  --route-short-name 18 \
+  --route-mkt 10018 \
+  --route-direction 1 \
+  --route-alternative "#" \
+  --output-dir outputs
+```
+
+הפלט כולל `data_quality` עבור `siri_snapshots`, שיעור `gtfs_ride_id` חסר, תקינות חלון תאריך/שעה, וזהות כיוון/חלופה.
+
+## יצירת דשבורד RTL
+
+הדשבורד מקבל CSV שנוצר מכלי אמינות הקו ומייצר HTML יחיד, ללא backend, עם KPI, גרף תכנון מול ביצוע לפי שעה, טבלת נסיעות, ואזור מגבלות/איכות נתונים.
+
+```bash
+python -m src.rtl_dashboard \
+  --csv outputs/line_reliability_2026-05-15_op_3_line_3644.csv \
+  --out outputs/line_reliability_dashboard.html \
+  --title "דוח אמינות קו"
+```
+
+אם לא מעבירים `--out`, הקובץ ייכתב ליד ה־CSV בשם `<csv-name>.dashboard.html`.
 
 ## עקרון עבודה
 
