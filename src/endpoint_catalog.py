@@ -31,7 +31,7 @@ _GROUP_HE: dict[str, str] = {
 _USE_CASES: dict[str, str] = {
     "/route_timetable": "לוח זמנים מתוכנן לתחנה/קו לתאריך נתון",
     "/stop_arrivals": "זמני הגעה בפועל לתחנה (SIRI)",
-    "/rides_execution": "השוואת נסיעות מתוכננות מול בוצעו",
+    "/rides_execution": "השוואת נסיעות מתוכננות מול ביצוע בפועל",
     "/siri_routes": "מסלולי SIRI (זיהוי קו בזמן אמת)",
     "/siri_rides": "נסיעות SIRI עם נתוני ביצוע",
     "/siri_stops": "תחנות SIRI",
@@ -145,10 +145,10 @@ def save_html(rows: list[dict[str, str]], path: Path) -> None:
     # Build table rows
     tbody_rows = ""
     for row in sorted(rows, key=lambda r: (r["group_en"], r["path"])):
+        badge_class = row["group_en"].replace(" ", "-")
         tbody_rows += (
             f"<tr>"
-            f"<td><span class='badge badge-{row['group_en'].replace(' ', '-')}">
-            f"{row['group_he']}</span></td>"
+            f"<td><span class='badge badge-{badge_class}'>{row['group_he']}</span></td>"
             f"<td><code>{row['method']}</code></td>"
             f"<td><code>{row['path']}</code></td>"
             f"<td>{row['summary']}</td>"
