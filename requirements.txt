@@ -1,4 +1,4 @@
 requests>=2.34.2
 pandas>=2.0
-pytest>=9.0.3
+pytest>=9.1.0
 pyarrow>=14.0
