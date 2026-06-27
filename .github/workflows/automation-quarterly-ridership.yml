@@ -4,8 +4,8 @@ name: Automation - quarterly ridership
 # --check-only exits 0 = unchanged (skip), 1 = new resource available (fetch).
 on:
   schedule:
-    # 05:00 UTC ≈ 08:00 Israel, on the 1st of every 3rd month.
-    - cron: '0 5 1 */3 *'
+    # 02:40 UTC ≈ 05:40 Israel, on the 1st of every 3rd month.
+    - cron: '40 2 1 */3 *'
   workflow_dispatch:
 
 permissions:
