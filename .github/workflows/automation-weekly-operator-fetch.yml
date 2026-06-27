@@ -48,7 +48,7 @@ jobs:
 
           git checkout -B "$BRANCH"
           python -m src.operator_weekly_fetch --date-from "$DATE_FROM" --date-to "$DATE_TO" --out "$OUT"
-          python -m pytest -q tests/test_open_bus_stride_client.py
+          python -m pytest -q tests/test_open_bus_stride_client.py tests/test_operator_weekly_fetch.py
 
           git add "$OUT"
           if git diff --cached --quiet; then

@@ -26,6 +26,13 @@ DEFAULT_EXCLUSIONS_DIR = Path("data/reference/exclusions_2026")
 NATIONAL_SCOPE = "ארצי"
 _PRECEDENCE = {"normal": 0, "keep": 1, "segment": 2, "drop": 3}
 
+# Clusters whose planned service is materially shaped by the Muslim calendar
+# (Eid/Ramadan ~50% planned reduction). Grounded in the branches/regional sheets:
+# הנגב carries Rahat/Negev sector lines; שרון includes שרון בינעירוני 'מגזר'
+# (Triangle: Tira/Taibe/...). Elad (Haredi) and Netanya Haredi lines are handled
+# by national Jewish-holiday drops, not here.
+MUSLIM_AFFECTED_CLUSTERS = frozenset({"הנגב", "שרון"})
+
 
 class ExclusionsCalendarError(RuntimeError):
     """Raised when the exclusions calendar cannot be loaded."""
@@ -194,3 +201,58 @@ def classify_date(
         scope=best.scope,
         hours_window=best.hours_window or None,
     )
+
+
+def classify_for_cluster(
+    service_date: date,
+    cluster: str | None,
+    entries: list[_Entry] | None = None,
+    *,
+    directory: str | Path = DEFAULT_EXCLUSIONS_DIR,
+) -> DateClassification:
+    """Cluster-aware classification: national gate, escalated by sector calendars.
+
+    National ``drop`` days close everything and win outright. Otherwise, for
+    Muslim-sector clusters the Muslim calendar (Eid/Ramadan ``segment``) is also
+    considered, and the most disruptive treatment wins. Returns the national
+    result for clusters with no sector sensitivity.
+    """
+    if entries is None:
+        entries = load_calendar(directory)
+
+    national = classify_date(service_date, entries, national_only=True)
+    if national.treatment == "drop":
+        return national
+
+    candidates = [national]
+    if cluster in MUSLIM_AFFECTED_CLUSTERS:
+        muslim_entries = [entry for entry in entries if entry.source == "muslim"]
+        candidates.append(classify_date(service_date, muslim_entries, national_only=False))
+
+    return max(candidates, key=lambda result: _PRECEDENCE[result.treatment])
+
+
+def load_line_uniqueness_treatments(
+    directory: str | Path = DEFAULT_EXCLUSIONS_DIR,
+) -> dict[str, dict[str, str]]:
+    """Map line-uniqueness category -> recommended treatment (sheet 06).
+
+    Exposed for the reporting layer and for future manifest enrichment; the
+    national/cluster gates above do not consume it because the line manifest
+    currently lacks a line-uniqueness column.
+    """
+    path = Path(directory) / "06_line_uniqueness_treatment.csv"
+    out: dict[str, dict[str, str]] = {}
+    if not path.exists():
+        return out
+    with open(path, newline="", encoding="utf-8") as handle:
+        for row in csv.DictReader(handle):
+            key = (row.get("ייחודיות_קו") or "").strip()
+            if not key:
+                continue
+            out[key] = {
+                "treatment": (row.get("טיפול_מומלץ") or "").strip(),
+                "sensitive_to": (row.get("רגיש_ל") or "").strip(),
+                "note": (row.get("הערה") or "").strip(),
+            }
+    return out

@@ -7,7 +7,9 @@ import pytest
 from src.exclusions_calendar import (
     DEFAULT_EXCLUSIONS_DIR,
     classify_date,
+    classify_for_cluster,
     load_calendar,
+    load_line_uniqueness_treatments,
 )
 
 
@@ -65,3 +67,23 @@ def test_muslim_calendar_is_branch_scoped_not_national(entries) -> None:
     branch = classify_date(date(2026, 3, 1), entries, national_only=False)
     assert national.treatment == "normal"
     assert branch.treatment == "segment"
+
+
+def test_muslim_cluster_segments_on_eid(entries) -> None:
+    # 2026-05-27 — עיד אל-אדחא. Negev/Sharon carry Muslim-sector lines.
+    negev = classify_for_cluster(date(2026, 5, 27), "הנגב", entries)
+    elad = classify_for_cluster(date(2026, 5, 27), "בקעת אונו אלעד", entries)
+    assert negev.treatment == "segment"
+    assert elad.treatment == "normal"  # Jewish/Haredi cluster, unaffected by Eid
+
+
+def test_national_drop_wins_over_cluster_sector(entries) -> None:
+    # National drop closes everything, even for a Muslim-sector cluster.
+    result = classify_for_cluster(date(2026, 4, 22), "הנגב", entries)
+    assert result.treatment == "drop"
+
+
+def test_line_uniqueness_treatments_load() -> None:
+    treatments = load_line_uniqueness_treatments()
+    assert treatments["תלמידים"]["treatment"] == "segment"
+    assert treatments["סדיר - מאושר שבת"]["treatment"] == "keep"

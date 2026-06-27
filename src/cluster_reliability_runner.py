@@ -15,7 +15,7 @@ from src.exclusions_calendar import (
     DEFAULT_EXCLUSIONS_DIR,
     DateClassification,
     ExclusionsCalendarError,
-    classify_date,
+    classify_for_cluster,
     load_calendar,
 )
 from src.line_reliability_analyzer import (
@@ -109,7 +109,9 @@ def run_cluster_reliability(
             summary_path=str(path),
         )
 
-    classification = _classify_service_date(service_day, exclusions_dir, ignore_exclusions)
+    classification = _classify_service_date(
+        service_day, selected_cluster, exclusions_dir, ignore_exclusions
+    )
     if classification.is_excluded:
         return ClusterRunResult(
             mode="excluded",
@@ -261,10 +263,11 @@ def _base_summary_row(
 
 def _classify_service_date(
     service_day: date,
+    cluster: str | None,
     exclusions_dir: str | Path | None,
     ignore_exclusions: bool,
 ) -> DateClassification:
-    """Classify the date nationally; degrade gracefully to ``normal`` on any error."""
+    """Classify the date for the cluster; degrade gracefully to ``normal`` on error."""
     if ignore_exclusions or exclusions_dir is None:
         return DateClassification(treatment="normal", source="none")
     try:
@@ -272,7 +275,7 @@ def _classify_service_date(
     except (ExclusionsCalendarError, OSError) as exc:
         print(f"warning: exclusions calendar unavailable ({exc}); treating as normal day.")
         return DateClassification(treatment="normal", source="none")
-    return classify_date(service_day, entries, national_only=True)
+    return classify_for_cluster(service_day, cluster, entries)
 
 
 def _load_manifest(path: Path) -> pd.DataFrame:

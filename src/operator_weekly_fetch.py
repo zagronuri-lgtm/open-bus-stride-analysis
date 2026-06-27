@@ -12,11 +12,18 @@ from __future__ import annotations
 import argparse
 import collections
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timezone
+from datetime import date, datetime, timezone
 import threading
 
 import pandas as pd
 import requests
+
+from src.exclusions_calendar import (
+    DEFAULT_EXCLUSIONS_DIR,
+    ExclusionsCalendarError,
+    classify_date,
+    load_calendar,
+)
 
 BASE = "https://open-bus-stride-api.hasadna.org.il"
 
@@ -87,6 +94,38 @@ def fetch_line(session, operator_ref, line_ref, date_from, date_to):
     return [(d, *v) for d, v in agg.items()]
 
 
+def annotate_exclusions(df, *, exclusions_dir=DEFAULT_EXCLUSIONS_DIR, ignore=False):
+    """Tag each row with the national exclusion treatment for its service_date.
+
+    Raw fetch: rows are annotated (drop/segment/keep/normal), never deleted, so
+    the report layer can exclude or segment days while keeping the full pull.
+    """
+    df = df.copy()
+    if "service_date" not in df.columns or df.empty:
+        df["exclusion_treatment"] = pd.Series(dtype=str)
+        df["exclusion_name"] = pd.Series(dtype=str)
+        return df
+    if ignore or exclusions_dir is None:
+        df["exclusion_treatment"] = "normal"
+        df["exclusion_name"] = ""
+        return df
+    try:
+        entries = load_calendar(exclusions_dir)
+    except (ExclusionsCalendarError, OSError) as exc:
+        print(f"[warn] exclusions calendar unavailable ({exc}); marking all days normal", flush=True)
+        df["exclusion_treatment"] = "normal"
+        df["exclusion_name"] = ""
+        return df
+
+    cache: dict[str, tuple[str, str]] = {}
+    for value in df["service_date"].unique():
+        result = classify_date(date.fromisoformat(str(value)), entries, national_only=True)
+        cache[value] = (result.treatment, result.name or "")
+    df["exclusion_treatment"] = df["service_date"].map(lambda v: cache[v][0])
+    df["exclusion_name"] = df["service_date"].map(lambda v: cache[v][1])
+    return df
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser()
     ap.add_argument("--date-from", required=True)
@@ -94,6 +133,8 @@ def main(argv=None):
     ap.add_argument("--out", required=True)
     ap.add_argument("--workers", type=int, default=6)
     ap.add_argument("--operators", default=None, help="comma list of refs to limit (debug)")
+    ap.add_argument("--exclusions-dir", default=str(DEFAULT_EXCLUSIONS_DIR), help="Exclusions calendar directory.")
+    ap.add_argument("--ignore-exclusions", action="store_true", help="Skip exclusion tagging (debug).")
     args = ap.parse_args(argv)
 
     refs = [int(x) for x in args.operators.split(",")] if args.operators else list(OPERATORS)
@@ -150,7 +191,12 @@ def main(argv=None):
             "missing": planned - executed,
         })
     df = pd.DataFrame(out)
+    df = annotate_exclusions(df, exclusions_dir=args.exclusions_dir, ignore=args.ignore_exclusions)
     df.to_csv(args.out, index=False)
+    flagged = df[df["exclusion_treatment"].isin(["drop", "segment"])] if not df.empty else df
+    if not flagged.empty:
+        tagged = sorted(set(zip(flagged["service_date"], flagged["exclusion_treatment"], flagged["exclusion_name"])))
+        print(f"[exclusions] flagged days: {tagged}", flush=True)
     print(f"[done] wrote {len(df)} rows to {args.out}; total lines={done[0]}; errors={len(errors)}", flush=True)
     if errors:
         print("[errors sample]", errors[:5], flush=True)
