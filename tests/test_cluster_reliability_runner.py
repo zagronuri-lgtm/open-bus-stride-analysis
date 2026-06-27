@@ -121,6 +121,94 @@ def test_runner_continues_after_line_error_and_writes_summary(tmp_path: Path, mo
     assert summary.loc[1, "error_message"] == "boom"
 
 
+def test_drop_day_is_excluded_without_running(tmp_path: Path, monkeypatch) -> None:
+    manifest = tmp_path / "manifest.csv"
+    _write_manifest(manifest)
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("analysis must not run on a dropped holiday")
+
+    monkeypatch.setattr(
+        "src.cluster_reliability_runner.analyze_line_reliability",
+        fail_if_called,
+    )
+
+    # 2026-04-22 — יום העצמאות (national drop day).
+    result = run_cluster_reliability(
+        manifest=manifest,
+        service_date="2026-04-22",
+        output_dir=tmp_path / "out",
+        cluster="שרון חולון מרחבי",
+    )
+
+    assert result.mode == "excluded"
+    assert result.exclusion_treatment == "drop"
+    assert result.summary_path is None
+
+
+def test_segment_day_runs_and_tags_summary(tmp_path: Path, monkeypatch) -> None:
+    manifest = tmp_path / "manifest.csv"
+    _write_manifest(manifest)
+
+    def fake_analyze(client, request, *, output_dir):
+        return (
+            pd.DataFrame([{"planned_start_time": "2026-07-15T08:00:00"}]),
+            {"planned_rides": 1, "actual_rides": 1, "matched_rides": 1},
+            {"selected_line_ref": "L-10", "csv_path": "c", "html_path": "h"},
+        )
+
+    monkeypatch.setattr(
+        "src.cluster_reliability_runner.analyze_line_reliability",
+        fake_analyze,
+    )
+
+    # 2026-07-15 — חופש גדול (national segment period).
+    result = run_cluster_reliability(
+        manifest=manifest,
+        service_date="2026-07-15",
+        output_dir=tmp_path / "out",
+        cluster="שרון חולון מרחבי",
+    )
+
+    assert result.mode == "cluster"
+    assert result.exclusion_treatment == "segment"
+    summary = pd.read_csv(result.summary_path)
+    assert set(summary["exclusion_treatment"]) == {"segment"}
+
+
+def test_ignore_exclusions_runs_on_a_drop_day(tmp_path: Path, monkeypatch) -> None:
+    manifest = tmp_path / "manifest.csv"
+    _write_manifest(manifest)
+    monkeypatch.setattr(
+        "src.cluster_reliability_runner.analyze_line_reliability",
+        lambda *a, **k: (pd.DataFrame(), {"planned_rides": 0}, {"selected_line_ref": None, "csv_path": "", "html_path": ""}),
+    )
+
+    result = run_cluster_reliability(
+        manifest=manifest,
+        service_date="2026-04-22",
+        output_dir=tmp_path / "out",
+        cluster="שרון חולון מרחבי",
+        ignore_exclusions=True,
+    )
+
+    assert result.mode == "cluster"
+    assert result.exclusion_treatment == "normal"
+
+
+def test_weekly_summary_drops_segment_rows(tmp_path: Path) -> None:
+    normal = _summary_path(tmp_path, "2026-06-28", "שרון חולון מרחבי")
+    segment = _summary_path(tmp_path, "2026-06-29", "בקעת אונו אלעד")
+    normal.parent.mkdir(parents=True, exist_ok=True)
+    pd.DataFrame([{"service_date": "2026-06-28", "exclusion_treatment": "normal"}]).to_csv(normal, index=False)
+    pd.DataFrame([{"service_date": "2026-06-29", "exclusion_treatment": "segment"}]).to_csv(segment, index=False)
+
+    path = build_weekly_summary(tmp_path, date(2026, 7, 2))
+
+    weekly = pd.read_csv(path)
+    assert list(weekly["service_date"]) == ["2026-06-28"]
+
+
 def test_build_weekly_summary_combines_previous_service_days(tmp_path: Path) -> None:
     first = _summary_path(tmp_path, "2026-06-28", "שרון חולון מרחבי")
     second = _summary_path(tmp_path, "2026-06-29", "בקעת אונו אלעד")

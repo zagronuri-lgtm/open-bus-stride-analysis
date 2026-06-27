@@ -51,7 +51,7 @@ jobs:
             --manifest data/reference/metropoline_line_ids.csv \
             --service-date "$SERVICE_DATE" \
             --output-dir data/output/reliability
-          python -m pytest -q tests/test_cluster_reliability_runner.py tests/test_line_reliability_analyzer.py
+          python -m pytest -q tests/test_cluster_reliability_runner.py tests/test_line_reliability_analyzer.py tests/test_exclusions_calendar.py
 
           git add -f data/output/reliability
           if git diff --cached --quiet; then

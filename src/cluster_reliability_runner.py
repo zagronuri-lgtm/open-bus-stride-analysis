@@ -11,6 +11,13 @@ from zoneinfo import ZoneInfo
 
 import pandas as pd
 
+from src.exclusions_calendar import (
+    DEFAULT_EXCLUSIONS_DIR,
+    DateClassification,
+    ExclusionsCalendarError,
+    classify_date,
+    load_calendar,
+)
 from src.line_reliability_analyzer import (
     LineReliabilityRequest,
     analyze_line_reliability,
@@ -52,6 +59,8 @@ class ClusterRunResult:
     success_count: int = 0
     error_count: int = 0
     summary_path: str | None = None
+    exclusion_treatment: str = "normal"
+    exclusion_name: str | None = None
 
 
 class ClusterReliabilityRunnerError(RuntimeError):
@@ -70,8 +79,16 @@ def run_cluster_reliability(
     output_dir: str | Path = DEFAULT_OUTPUT_DIR,
     cluster: str | None = None,
     dry_run: bool = False,
+    exclusions_dir: str | Path | None = DEFAULT_EXCLUSIONS_DIR,
+    ignore_exclusions: bool = False,
 ) -> ClusterRunResult:
-    """Run the scheduled cluster, continue after line errors, and write summary CSV."""
+    """Run the scheduled cluster, continue after line errors, and write summary CSV.
+
+    Service dates flagged ``drop`` in the exclusions calendar (national holidays,
+    eves, memorial days) are skipped so they never bias reliability averages;
+    ``segment`` days (Hol Hamoed, summer break) run but are tagged and excluded
+    from the weekly average.
+    """
     service_day = _resolve_service_date(service_date)
     selected_cluster = cluster or _cluster_for_service_date(service_day)
     out_dir = Path(output_dir)
@@ -92,6 +109,16 @@ def run_cluster_reliability(
             summary_path=str(path),
         )
 
+    classification = _classify_service_date(service_day, exclusions_dir, ignore_exclusions)
+    if classification.is_excluded:
+        return ClusterRunResult(
+            mode="excluded",
+            service_date=service_day.isoformat(),
+            cluster=selected_cluster,
+            exclusion_treatment=classification.treatment,
+            exclusion_name=classification.name,
+        )
+
     manifest_df = _load_manifest(Path(manifest))
     cluster_df = manifest_df[manifest_df["cluster"] == selected_cluster].copy()
     if cluster_df.empty:
@@ -106,18 +133,23 @@ def run_cluster_reliability(
 
     if dry_run:
         _print_dry_run(selected_cluster, service_day, cluster_df)
+        print(f"exclusion_treatment: {classification.treatment}")
+        if classification.name:
+            print(f"exclusion_name: {classification.name}")
         return ClusterRunResult(
             mode="dry-run",
             service_date=service_day.isoformat(),
             cluster=selected_cluster,
             total_rows=total_rows,
             unique_lines=unique_lines,
+            exclusion_treatment=classification.treatment,
+            exclusion_name=classification.name,
         )
 
     summary_rows: list[dict[str, Any]] = []
     for _, row in cluster_df.iterrows():
         summary_rows.append(
-            _run_manifest_row(row, selected_cluster, service_day, out_dir)
+            _run_manifest_row(row, selected_cluster, service_day, out_dir, classification)
         )
 
     summary_path = _summary_path(out_dir, service_day.isoformat(), selected_cluster)
@@ -134,6 +166,8 @@ def run_cluster_reliability(
         success_count=success_count,
         error_count=error_count,
         summary_path=str(summary_path),
+        exclusion_treatment=classification.treatment,
+        exclusion_name=classification.name,
     )
 
 
@@ -155,7 +189,12 @@ def build_weekly_summary(output_dir: str | Path, service_date: date) -> Path:
     weekly_path = out_dir / f"weekly_summary_{iso_year}W{iso_week:02d}.csv"
     weekly_path.parent.mkdir(parents=True, exist_ok=True)
     if frames:
-        pd.concat(frames, ignore_index=True).to_csv(weekly_path, index=False)
+        combined = pd.concat(frames, ignore_index=True)
+        if "exclusion_treatment" in combined.columns:
+            # segment days (Hol Hamoed, summer break) must not bias the weekly average.
+            treatment = combined["exclusion_treatment"].fillna("normal")
+            combined = combined[treatment.isin(["normal", "keep"])]
+        combined.to_csv(weekly_path, index=False)
     else:
         pd.DataFrame().to_csv(weekly_path, index=False)
     return weekly_path
@@ -166,8 +205,9 @@ def _run_manifest_row(
     cluster: str,
     service_day: date,
     output_dir: Path,
+    classification: DateClassification,
 ) -> dict[str, Any]:
-    base = _base_summary_row(row, cluster, service_day)
+    base = _base_summary_row(row, cluster, service_day, classification)
     request = LineReliabilityRequest(
         service_date=service_day.isoformat(),
         operator_ref=str(row["operator_ref"]),
@@ -200,7 +240,12 @@ def _run_manifest_row(
     }
 
 
-def _base_summary_row(row: pd.Series, cluster: str, service_day: date) -> dict[str, Any]:
+def _base_summary_row(
+    row: pd.Series,
+    cluster: str,
+    service_day: date,
+    classification: DateClassification,
+) -> dict[str, Any]:
     return {
         "service_date": service_day.isoformat(),
         "cluster": cluster,
@@ -209,7 +254,25 @@ def _base_summary_row(row: pd.Series, cluster: str, service_day: date) -> dict[s
         "route_mkt": str(row["route_mkt"]),
         "route_direction": str(row["route_direction"]),
         "route_alternative": str(row["route_alternative"]),
+        "exclusion_treatment": classification.treatment,
+        "exclusion_name": classification.name or "",
     }
+
+
+def _classify_service_date(
+    service_day: date,
+    exclusions_dir: str | Path | None,
+    ignore_exclusions: bool,
+) -> DateClassification:
+    """Classify the date nationally; degrade gracefully to ``normal`` on any error."""
+    if ignore_exclusions or exclusions_dir is None:
+        return DateClassification(treatment="normal", source="none")
+    try:
+        entries = load_calendar(exclusions_dir)
+    except (ExclusionsCalendarError, OSError) as exc:
+        print(f"warning: exclusions calendar unavailable ({exc}); treating as normal day.")
+        return DateClassification(treatment="normal", source="none")
+    return classify_date(service_day, entries, national_only=True)
 
 
 def _load_manifest(path: Path) -> pd.DataFrame:
@@ -264,6 +327,8 @@ def main(argv: Sequence[str] | None = None) -> int:
     parser.add_argument("--output-dir", default=str(DEFAULT_OUTPUT_DIR))
     parser.add_argument("--cluster", default=None, help="Manual cluster override for debugging.")
     parser.add_argument("--dry-run", action="store_true", help="Print selected route identities without API calls.")
+    parser.add_argument("--exclusions-dir", default=str(DEFAULT_EXCLUSIONS_DIR), help="Exclusions calendar directory.")
+    parser.add_argument("--ignore-exclusions", action="store_true", help="Disable holiday/anomaly gating (debug).")
     args = parser.parse_args(argv)
 
     try:
@@ -273,6 +338,8 @@ def main(argv: Sequence[str] | None = None) -> int:
             output_dir=args.output_dir,
             cluster=args.cluster,
             dry_run=args.dry_run,
+            exclusions_dir=args.exclusions_dir,
+            ignore_exclusions=args.ignore_exclusions,
         )
     except ClusterReliabilityRunnerError as exc:
         parser.exit(2, f"cluster_reliability_runner: {exc}\n")
@@ -280,6 +347,12 @@ def main(argv: Sequence[str] | None = None) -> int:
     print(f"mode: {result.mode}")
     print(f"service_date: {result.service_date}")
     print(f"cluster: {result.cluster}")
+    print(f"exclusion_treatment: {result.exclusion_treatment}")
+    if result.exclusion_name:
+        print(f"exclusion_name: {result.exclusion_name}")
+    if result.mode == "excluded":
+        print("note: service date dropped from analysis (holiday/anomalous day).")
+        return 0
     print(f"manifest_rows: {result.total_rows}")
     print(f"unique_route_short_names: {result.unique_lines}")
     print(f"success_count: {result.success_count}")
