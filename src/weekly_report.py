@@ -64,6 +64,12 @@ SIRI_FAULT_RATE = 0.50       # ביצוע/מתוכנן נמוך מ-50% מהרג�
 
 SESSION = requests.Session()
 SESSION.headers.update({"Accept": "application/json"})
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
+_retry = Retry(total=5, connect=5, read=5, backoff_factor=1.5, status_forcelist=(429, 500, 502, 503, 504), allowed_methods=frozenset(["GET"]))
+_adapter = HTTPAdapter(max_retries=_retry, pool_maxsize=16)
+SESSION.mount("https://", _adapter)
+SESSION.mount("http://", _adapter)
 
 # שרת ה-GTFS של משרד התחבורה מחזיר דף HTML אם נשלח Accept: application/json —
 # הורדות ה-zip חייבות לבטל את הכותרת הזו.
