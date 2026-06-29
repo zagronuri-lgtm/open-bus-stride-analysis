@@ -19,6 +19,18 @@ from src.exclusions_calendar import (
 API = "https://open-bus-stride-api.hasadna.org.il"
 GTFS_ZIP = "https://gtfs.mot.gov.il/gtfsfiles/israel-public-transportation.zip"
 CLUSTER_ZIP = "https://gtfs.mot.gov.il/gtfsfiles/ClusterToLine.zip"
+import os
+def _zip_bytes(url, cache_name, timeout):
+  os.makedirs("data", exist_ok=True)
+  local = os.path.join("data", cache_name)
+  if os.path.exists(local):
+    with open(local, "rb") as fh:
+      return fh.read()
+  data = SESSION.get(url, timeout=timeout, headers=ZIP_HEADERS).content
+  with open(local, "wb") as fh:
+    fh.write(data)
+  return data
+
 
 OPERATORS = {  # operator_ref -> שם
     3: "אגד", 5: "דן", 15: "מטרופולין", 16: "סופרבוס",
@@ -180,7 +192,7 @@ def load_gtfs_lengths() -> dict[str, float]:
     מוריד את ה-GTFS הארצי, מחשב אורך כל route_id (ק"מ) לפי ה-shape השכיח בטריפים שלו.
     הצלבה: route_id == line_ref. מחזיר line_ref(str) -> אורך_ק"מ.
     """
-    z = zipfile.ZipFile(io.BytesIO(SESSION.get(GTFS_ZIP, timeout=600, headers=ZIP_HEADERS).content))
+        z = zipfile.ZipFile(io.BytesIO(_zip_bytes(GTFS_ZIP, "israel-public-transportation.zip", 600)))
 
     def read(name):
         # קבצי ה-GTFS של משרד התחבורה כוללים BOM — utf-8-sig מסיר אותו,
@@ -226,7 +238,7 @@ def load_clusters() -> dict[str, str]:
     מוריד את ClusterToLine.zip ומחזיר מיפוי route_mkt(ללא אפסים מובילים) -> שם אשכול.
     OfficeLineId הוא ה-route_mkt. רשומות פעילות בלבד (ToDate בעתיד).
     """
-    z = zipfile.ZipFile(io.BytesIO(SESSION.get(CLUSTER_ZIP, timeout=300, headers=ZIP_HEADERS).content))
+        z = zipfile.ZipFile(io.BytesIO(_zip_bytes(CLUSTER_ZIP, "ClusterToLine.zip", 300)))
     name = z.namelist()[0]
     out: dict[str, str] = {}
     with z.open(name) as f:
