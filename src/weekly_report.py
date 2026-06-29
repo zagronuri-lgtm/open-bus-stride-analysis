@@ -192,7 +192,7 @@ def load_gtfs_lengths() -> dict[str, float]:
     מוריד את ה-GTFS הארצי, מחשב אורך כל route_id (ק"מ) לפי ה-shape השכיח בטריפים שלו.
     הצלבה: route_id == line_ref. מחזיר line_ref(str) -> אורך_ק"מ.
     """
-      z = zipfile.ZipFile(io.BytesIO(_zip_bytes(GTFS_ZIP, "israel-public-transportation.zip", 600)))
+    z = zipfile.ZipFile(io.BytesIO(_zip_bytes(GTFS_ZIP, "israel-public-transportation.zip", 600)))
 
     def read(name):
         # קבצי ה-GTFS של משרד התחבורה כוללים BOM — utf-8-sig מסיר אותו,
@@ -238,7 +238,7 @@ def load_clusters() -> dict[str, str]:
     מוריד את ClusterToLine.zip ומחזיר מיפוי route_mkt(ללא אפסים מובילים) -> שם אשכול.
     OfficeLineId הוא ה-route_mkt. רשומות פעילות בלבד (ToDate בעתיד).
     """
-      z = zipfile.ZipFile(io.BytesIO(_zip_bytes(CLUSTER_ZIP, "ClusterToLine.zip", 300)))
+    z = zipfile.ZipFile(io.BytesIO(_zip_bytes(CLUSTER_ZIP, "ClusterToLine.zip", 300)))
     name = z.namelist()[0]
     out: dict[str, str] = {}
     with z.open(name) as f:
