@@ -192,13 +192,13 @@ def load_gtfs_lengths() -> dict[str, float]:
     מוריד את ה-GTFS הארצי, מחשב אורך כל route_id (ק"מ) לפי ה-shape השכיח בטריפים שלו.
     הצלבה: route_id == line_ref. מחזיר line_ref(str) -> אורך_ק"מ.
     """
-    z = zipfile.ZipFile(io.BytesIO(_zip_bytes(GTFS_ZIP, "israel-public-transportation.zip", 600)))
+  z = zipfile.ZipFile(io.BytesIO(_zip_bytes(GTFS_ZIP, "israel-public-transportation.zip", 600)))
 
-    def read(name):
-        # קבצי ה-GTFS של משרד התחבורה כוללים BOM — utf-8-sig מסיר אותו,
-        # אחרת שם העמודה הראשונה מקבל תחילית '﻿' (KeyError על shape_id/route_id).
-        with z.open(name) as f:
-            return list(csv.DictReader(io.TextIOWrapper(f, "utf-8-sig")))
+  def read(name):
+      # קבצי ה-GTFS של משרד התחבורה כוללים BOM — utf-8-sig מסיר אותו,
+      # אחרת שם העמודה הראשונה מקבל תחילית '﻿' (KeyError על shape_id/route_id).
+      with z.open(name) as f:
+          return list(csv.DictReader(io.TextIOWrapper(f, "utf-8-sig")))
 
     # shapes: shape_id -> [(lat,lon)] ממוין לפי shape_pt_sequence
     shape_pts = collections.defaultdict(list)
