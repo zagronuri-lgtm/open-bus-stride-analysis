@@ -1,0 +1,146 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>דוח אמינות קו</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; direction: rtl; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 24px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
+    th { background: #f3f3f3; }
+  </style>
+</head>
+<body>
+  <h1>דוח אמינות קו: תכנון מול ביצוע</h1>
+  <p>תאריך שירות: 2026-06-29 | מפעיל: 15 | מספר קו: 138</p>
+  <h2>KPI</h2>
+  <table><tr><th>planned_rides</th><td>22</td></tr><tr><th>actual_rides</th><td>22</td></tr><tr><th>matched_rides</th><td>20</td></tr><tr><th>missing_actual_start</th><td>0</td></tr><tr><th>null_gtfs_ride_id_rate</th><td>0.09090909090909091</td></tr></table>
+  <h2>בדיקות איכות לפני KPI</h2>
+  <table>
+    <tr><th>בדיקה</th><th>סטטוס</th><th>ערך</th><th>פירוט</th></tr>
+    <tr><th>line_identity</th><td>ok</td><td>line_ref=1023, route_mkt=10138, route_direction=1, route_alternative=0, candidate_rows=1</td><td>line_ref selected only after candidate set was unique.</td></tr><tr><th>date_time_window</th><td>warning</td><td>invalid=2; outside_date=0; outside_hours=0</td><td>Validates planned_start_time against service_date and requested hour window.</td></tr><tr><th>gtfs_ride_id_missing_rate</th><td>ok</td><td>2/22 (9.1%)</td><td>High missing gtfs_ride_id rate weakens planned-vs-actual matching. Threshold=25%.</td></tr><tr><th>siri_snapshots</th><td>warning</td><td>rows=20; statuses={'loaded': 19, 'loading': 1}; errors=0</td><td>Latest SIRI ETL snapshot metadata checked before KPI interpretation.</td></tr>
+  </table>
+  <h2>פירוט נסיעות</h2>
+  <table class="dataframe dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>planned_start_time</th>
+      <th>actual_start_time</th>
+      <th>gtfs_ride_id</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2026-06-29T02:30:00+00:00</td>
+      <td>2026-06-29T02:30:00+00:00</td>
+      <td>148915337.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T03:10:00+00:00</td>
+      <td>2026-06-29T03:10:00+00:00</td>
+      <td>148816324.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T04:00:00+00:00</td>
+      <td>2026-06-29T04:00:00+00:00</td>
+      <td>148812920.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T04:30:00+00:00</td>
+      <td>2026-06-29T04:30:00+00:00</td>
+      <td>148810245.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T05:00:00+00:00</td>
+      <td>2026-06-29T05:00:00+00:00</td>
+      <td>148810134.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T05:25:00+00:00</td>
+      <td>2026-06-29T05:25:00+00:00</td>
+      <td>148810137.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T05:55:00+00:00</td>
+      <td>2026-06-29T05:55:00+00:00</td>
+      <td>148810244.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T06:50:00+00:00</td>
+      <td>2026-06-29T06:50:00+00:00</td>
+      <td>148812927.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T07:45:00+00:00</td>
+      <td>2026-06-29T07:45:00+00:00</td>
+      <td>148812922.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T09:10:00+00:00</td>
+      <td>2026-06-29T09:10:00+00:00</td>
+      <td>148814014.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T10:05:00+00:00</td>
+      <td>2026-06-29T10:05:00+00:00</td>
+      <td>148814016.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T10:25:00+00:00</td>
+      <td>2026-06-29T10:25:00+00:00</td>
+      <td>148816325.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T11:00:00+00:00</td>
+      <td>2026-06-29T11:00:00+00:00</td>
+      <td>148810135.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T12:05:00+00:00</td>
+      <td>2026-06-29T12:05:00+00:00</td>
+      <td>148812921.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T13:00:00+00:00</td>
+      <td>2026-06-29T13:00:00+00:00</td>
+      <td>148915336.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T13:55:00+00:00</td>
+      <td>2026-06-29T13:55:00+00:00</td>
+      <td>148814015.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T14:50:00+00:00</td>
+      <td>2026-06-29T14:50:00+00:00</td>
+      <td>148814017.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T15:45:00+00:00</td>
+      <td>2026-06-29T15:45:00+00:00</td>
+      <td>148915335.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T17:10:00+00:00</td>
+      <td>2026-06-29T17:10:00+00:00</td>
+      <td>148813023.0</td>
+    </tr>
+    <tr>
+      <td>2026-06-29T18:05:00+00:00</td>
+      <td>2026-06-29T18:05:00+00:00</td>
+      <td>148810136.0</td>
+    </tr>
+    <tr>
+      <td>NaN</td>
+      <td>2026-06-29T02:57:00+00:00</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <td>NaN</td>
+      <td>2026-06-29T04:42:00+00:00</td>
+      <td>NaN</td>
+    </tr>
+  </tbody>
+</table>
+</body>
+</html>
