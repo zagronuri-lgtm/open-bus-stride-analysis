@@ -32,7 +32,7 @@ jobs:
           echo "REPORT_TAG=weekly-$(date +%F)" >> "$GITHUB_ENV"
 
       - name: Publish as Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           tag_name: ${{ env.REPORT_TAG }}
           name: "Weekly report ${{ env.REPORT_TAG }}"
