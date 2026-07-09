@@ -276,7 +276,77 @@ def build_workbook(investigation: dict | None, output_path: Path) -> Path:
             rr += 1
         _autosize(ws, [12, 10, 12, 12, 12, 10])
 
-    # ---- 6. מסקנות ----
+    # ---- 6. דוגמאות פער ----
+    ws = wb.create_sheet("דוגמאות פער")
+    ws.sheet_view.rightToLeft = True
+    ws["A1"] = "דוגמאות שממחישות את הפער — סניף 500"
+    ws["A1"].font = s["title"]
+    ws["A2"] = "אמת = Power BI (~2.53%). Stride = חסם תחתון בחלון צר."
+    ws["A2"].font = Font(name="Arial", italic=True, size=9, color="666666")
+
+    ws["A4"] = "1) פער במונה (אותו מכנה א׳–ג׳)"
+    ws["A4"].font = Font(name="Arial", bold=True, color="1F4E78")
+    _header(ws, ["מדד", "ערך", "הסבר"], row=5, styles=s)
+    num_rows = [
+        ("מתוכנן Stride", 3866, "מכנה א׳–ג׳ תקפים"),
+        ("חסרות ב-Stride", 16, "0.41%"),
+        ("חסרות ל-2.5%", 97, "יעד כמו BI"),
+        ("פער מונה", 81, "נסיעות שלא נספרות אצלנו"),
+    ]
+    for i, (a, b, c) in enumerate(num_rows, start=6):
+        ws.cell(i, 1, a)
+        ws.cell(i, 2, b)
+        ws.cell(i, 3, c)
+        if a == "פער מונה":
+            ws.cell(i, 2).fill = s["warn"]
+
+    ws["A11"] = "2) ימים — למה הממוצע נמוך"
+    ws["A11"].font = Font(name="Arial", bold=True, color="1F4E78")
+    _header(ws, ["תאריך", "% Stride", "בממוצע הדוח?", "הערה"], row=12, styles=s)
+    day_rows = [
+        ("2026-06-28", 0.0008, True, "שקט"),
+        ("2026-06-29", 0.0, True, "0% — מושך ממוצע למטה"),
+        ("2026-06-30", 0.0116, True, "עדיין מתחת ל-2%"),
+        ("2026-07-01", 0.0200, False, "≈2% אבל הוחרג (חופש גדול)"),
+        ("2026-07-02", 0.0138, False, "הוחרג"),
+        ("2026-07-04", 0.1043, False, "10%+ הוחרג"),
+    ]
+    for i, (d, p, v, n) in enumerate(day_rows, start=13):
+        ws.cell(i, 1, d)
+        cell = ws.cell(i, 2, p)
+        cell.number_format = "0.00%"
+        ws.cell(i, 3, "כן" if v else "לא").fill = s["truth"] if v else s["warn"]
+        ws.cell(i, 4, n)
+
+    ws["A20"] = "3) קווים בא׳–ג׳ — מה כן נספר"
+    ws["A20"].font = Font(name="Arial", bold=True, color="1F4E78")
+    _header(ws, ["מק״ט", "קו", "סוג", "חסרות", "מתוכנן", "%"], row=21, styles=s)
+    line_rows = [
+        ("11230", "230", "לילה", 8, 10, 0.80),
+        ("11231", "231", "לילה", 6, 7, 0.857),
+        ("22006", "6", "סדיר", 2, 192, 0.010),
+        ("11501", "501", "סדיר נפח גדול", 0, 378, 0.0),
+    ]
+    for i, row in enumerate(line_rows, start=22):
+        for j, v in enumerate(row, 1):
+            cell = ws.cell(i, j, v)
+            if j == 6:
+                cell.number_format = "0.0%"
+                if row[5] >= 0.5:
+                    cell.fill = s["warn"]
+
+    ws["A27"] = "4) כשהחלון זהה — אין פער"
+    ws["A27"].font = Font(name="Arial", bold=True, color="1F4E78")
+    _header(ws, ["תאריך", "Stride", "BI", "מסקנה"], row=28, styles=s)
+    ws["A29"] = "2026-07-05"
+    ws["B29"] = 0.0531
+    ws["C29"] = 0.0531
+    ws["B29"].number_format = ws["C29"].number_format = "0.00%"
+    ws["B29"].fill = ws["C29"].fill = s["truth"]
+    ws["D29"] = "התאמה מלאה — הפער השבועי הוא חלון+הגדרה, לא באג מיפוי"
+    _autosize(ws, [28, 14, 18, 55])
+
+    # ---- 7. מסקנות ----
     ws = wb.create_sheet("מסקנות חקירה")
     ws.sheet_view.rightToLeft = True
     ws["A1"] = "מסקנות — חקירת פער סניף 500"
@@ -289,6 +359,7 @@ def build_workbook(investigation: dict | None, output_path: Path) -> Path:
         "5. קווי לילה 11230/11231 תורמים חסרים יחסיים גבוהים בנפח קטן — לא מסבירים לבד את פער ה-2%.",
         "6. להשוואה תפעולית: להשתמש ב-Power BI Branch=500 (או גיליון «הדבק BI חי»), לא בסיכום מנהלים של Stride.",
         "7. שליפת BI חיה Branch=500 לא בוצעה בסביבת cloud זו — לרענן בגיליון ההדבקה כשיש דפדפן.",
+        "8. דוגמאות: פער מונה ≈81; ד׳≈2% הוחרג; לילה 230/231 = רוב החסרים בא׳–ג׳; 05/07 = 5.31%=BI.",
     ]
     for i, t in enumerate(bullets, start=3):
         ws.cell(i, 1, t).font = s["base"]

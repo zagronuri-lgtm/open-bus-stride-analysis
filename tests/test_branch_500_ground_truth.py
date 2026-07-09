@@ -80,3 +80,5 @@ def test_ground_truth_workbook_builds(tmp_path: Path):
     assert "הדבק BI חי" in wb.sheetnames
     assert "השוואת Stride (משני)" in wb.sheetnames
     assert "מיפוי 20 מק״ט" in wb.sheetnames
+    assert "דוגמאות פער" in wb.sheetnames
+    assert "מסקנות חקירה" in wb.sheetnames

@@ -289,5 +289,99 @@
       "definition_2_1_1_lower_bound_vs_official_bi",
       "not_mapping_error_20_mkts_stable"
     ]
+  },
+  "gap_examples": {
+    "numerator_gap": {
+      "window": "א׳–ג׳ תקפים",
+      "planned": 3866,
+      "stride_missing": 16,
+      "needed_for_2_5pct": 97,
+      "missing_gap": 81,
+      "note": "לב הפער: ~81 נסיעות שלא נספרות ב-Stride מול יעד 2.5%"
+    },
+    "daily": [
+      {
+        "date": "2026-06-28",
+        "pct": 0.0008,
+        "in_avg": true,
+        "note": "שקט"
+      },
+      {
+        "date": "2026-06-29",
+        "pct": 0.0,
+        "in_avg": true,
+        "note": "0% — מושך ממוצע למטה"
+      },
+      {
+        "date": "2026-06-30",
+        "pct": 0.0116,
+        "in_avg": true,
+        "note": "עדיין מתחת ל-2%"
+      },
+      {
+        "date": "2026-07-01",
+        "pct": 0.02,
+        "in_avg": false,
+        "note": "≈2% אבל הוחרג (חופש גדול)"
+      },
+      {
+        "date": "2026-07-02",
+        "pct": 0.0138,
+        "in_avg": false,
+        "note": "הוחרג"
+      },
+      {
+        "date": "2026-07-04",
+        "pct": 0.1043,
+        "in_avg": false,
+        "note": "10%+ הוחרג"
+      }
+    ],
+    "hot_lines_valid_days": [
+      {
+        "mkt": "11230",
+        "line": "230",
+        "kind": "לילה",
+        "missing": 8,
+        "planned": 10,
+        "pct": 0.8
+      },
+      {
+        "mkt": "11231",
+        "line": "231",
+        "kind": "לילה",
+        "missing": 6,
+        "planned": 7,
+        "pct": 0.857
+      },
+      {
+        "mkt": "22006",
+        "line": "6",
+        "kind": "סדיר",
+        "missing": 2,
+        "planned": 192,
+        "pct": 0.01
+      },
+      {
+        "mkt": "11501",
+        "line": "501",
+        "kind": "סדיר נפח גדול",
+        "missing": 0,
+        "planned": 378,
+        "pct": 0.0
+      }
+    ],
+    "matched_day_anchor": {
+      "date": "2026-07-05",
+      "stride_pct": 0.0531,
+      "bi_pct": 0.0531,
+      "note": "כשהחלון זהה — אין פער"
+    },
+    "bi_truth": {
+      "aggregate_pct": 0.0253,
+      "day_0507_pct": 0.0531,
+      "live_branch_500_scrape": null,
+      "live_scrape_blocker": "no browser MCP / Power BI auth in cloud agent"
+    }
   }
 }
