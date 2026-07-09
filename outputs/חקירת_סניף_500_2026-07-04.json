@@ -1,0 +1,293 @@
+{
+  "week": {
+    "sun": "2026-06-28",
+    "sat": "2026-07-04"
+  },
+  "bi_anchors": {
+    "aggregate_siri_attached": {
+      "label": "אגרגט סניפים מצורף לכיול 08/07",
+      "pct": 0.0253,
+      "note": "METROPOLIN_BRANCHES_AGG ב-create_calibration_workbook.py"
+    },
+    "day_2026-07-05": {
+      "label": "יום 05/07 — עוגן מצורף",
+      "pct": 0.0531,
+      "note": "Stride=BI=5.31% באותו יום (מקדם רכיב ≈1.0 לאותו חלון)"
+    }
+  },
+  "summary": {
+    "branch": "500",
+    "windows": {
+      "valid_weekdays_sun_tue": {
+        "planned": 3866,
+        "executed": 3850,
+        "missing": 16,
+        "pct": 0.004138644593895499,
+        "rows": 117
+      },
+      "weekdays_sun_thu_incl_segment": {
+        "planned": 6472,
+        "executed": 6412,
+        "missing": 60,
+        "pct": 0.009270704573547589,
+        "rows": 199
+      },
+      "full_week": {
+        "planned": 7223,
+        "executed": 7146,
+        "missing": 77,
+        "pct": 0.010660390419493286,
+        "rows": 254
+      },
+      "july_only_wed_thu": {
+        "planned": 2606,
+        "executed": 2562,
+        "missing": 44,
+        "pct": 0.01688411358403684,
+        "rows": 82
+      }
+    },
+    "by_day": {
+      "2026-06-28": {
+        "planned": 1286,
+        "executed": 1285,
+        "missing": 1,
+        "pct": 0.0007776049766718507,
+        "classification": "תקין",
+        "valid": true
+      },
+      "2026-06-29": {
+        "planned": 1283,
+        "executed": 1283,
+        "missing": 0,
+        "pct": 0.0,
+        "classification": "תקין",
+        "valid": true
+      },
+      "2026-06-30": {
+        "planned": 1297,
+        "executed": 1282,
+        "missing": 15,
+        "pct": 0.01156515034695451,
+        "classification": "תקין",
+        "valid": true
+      },
+      "2026-07-01": {
+        "planned": 1302,
+        "executed": 1276,
+        "missing": 26,
+        "pct": 0.019969278033794162,
+        "classification": "דפוס מיוחד (לוח)",
+        "valid": false
+      },
+      "2026-07-02": {
+        "planned": 1304,
+        "executed": 1286,
+        "missing": 18,
+        "pct": 0.013803680981595092,
+        "classification": "דפוס מיוחד (לוח)",
+        "valid": false
+      },
+      "2026-07-03": {
+        "planned": 588,
+        "executed": 588,
+        "missing": 0,
+        "pct": 0.0,
+        "classification": "דפוס מיוחד (לוח)",
+        "valid": false
+      },
+      "2026-07-04": {
+        "planned": 163,
+        "executed": 146,
+        "missing": 17,
+        "pct": 0.10429447852760736,
+        "classification": "דפוס מיוחד (לוח)",
+        "valid": false
+      }
+    },
+    "by_mkt_valid": {
+      "11230": {
+        "planned": 10,
+        "executed": 2,
+        "missing": 8,
+        "line_ref": "7728",
+        "pct": 0.8
+      },
+      "11231": {
+        "planned": 7,
+        "executed": 1,
+        "missing": 6,
+        "line_ref": "9486",
+        "pct": 0.8571428571428571
+      },
+      "22006": {
+        "planned": 192,
+        "executed": 190,
+        "missing": 2,
+        "line_ref": "2265",
+        "pct": 0.010416666666666666
+      },
+      "23012": {
+        "planned": 246,
+        "executed": 246,
+        "missing": 0,
+        "line_ref": "2312",
+        "pct": 0.0
+      },
+      "11501": {
+        "planned": 378,
+        "executed": 378,
+        "missing": 0,
+        "line_ref": "5189",
+        "pct": 0.0
+      },
+      "10524": {
+        "planned": 93,
+        "executed": 93,
+        "missing": 0,
+        "line_ref": "5214",
+        "pct": 0.0
+      },
+      "10525": {
+        "planned": 198,
+        "executed": 198,
+        "missing": 0,
+        "line_ref": "5218",
+        "pct": 0.0
+      },
+      "10531": {
+        "planned": 180,
+        "executed": 180,
+        "missing": 0,
+        "line_ref": "5224",
+        "pct": 0.0
+      },
+      "10561": {
+        "planned": 240,
+        "executed": 240,
+        "missing": 0,
+        "line_ref": "5236",
+        "pct": 0.0
+      },
+      "19047": {
+        "planned": 357,
+        "executed": 357,
+        "missing": 0,
+        "line_ref": "7699",
+        "pct": 0.0
+      },
+      "20048": {
+        "planned": 354,
+        "executed": 354,
+        "missing": 0,
+        "line_ref": "7701",
+        "pct": 0.0
+      },
+      "25090": {
+        "planned": 342,
+        "executed": 342,
+        "missing": 0,
+        "line_ref": "7705",
+        "pct": 0.0
+      },
+      "11249": {
+        "planned": 321,
+        "executed": 321,
+        "missing": 0,
+        "line_ref": "10119",
+        "pct": 0.0
+      },
+      "40091": {
+        "planned": 195,
+        "executed": 195,
+        "missing": 0,
+        "line_ref": "16352",
+        "pct": 0.0
+      },
+      "10572": {
+        "planned": 66,
+        "executed": 66,
+        "missing": 0,
+        "line_ref": "19691",
+        "pct": 0.0
+      },
+      "16024": {
+        "planned": 288,
+        "executed": 288,
+        "missing": 0,
+        "line_ref": "22825",
+        "pct": 0.0
+      },
+      "59021": {
+        "planned": 222,
+        "executed": 222,
+        "missing": 0,
+        "line_ref": "23991",
+        "pct": 0.0
+      },
+      "73008": {
+        "planned": 177,
+        "executed": 177,
+        "missing": 0,
+        "line_ref": "29094",
+        "pct": 0.0
+      }
+    },
+    "day_classifications": {
+      "2026-06-28": {
+        "dow": "א",
+        "classification": "תקין",
+        "valid": true,
+        "reason": ""
+      },
+      "2026-06-29": {
+        "dow": "ב",
+        "classification": "תקין",
+        "valid": true,
+        "reason": ""
+      },
+      "2026-06-30": {
+        "dow": "ג",
+        "classification": "תקין",
+        "valid": true,
+        "reason": ""
+      },
+      "2026-07-01": {
+        "dow": "ד",
+        "classification": "דפוס מיוחד (לוח)",
+        "valid": false,
+        "reason": "לוח החרגות: חופש גדול — דפוס שונה, מוצג בנפרד"
+      },
+      "2026-07-02": {
+        "dow": "ה",
+        "classification": "דפוס מיוחד (לוח)",
+        "valid": false,
+        "reason": "לוח החרגות: חופש גדול — דפוס שונה, מוצג בנפרד"
+      },
+      "2026-07-03": {
+        "dow": "ו",
+        "classification": "דפוס מיוחד (לוח)",
+        "valid": false,
+        "reason": "לוח החרגות: חופש גדול — דפוס שונה, מוצג בנפרד"
+      },
+      "2026-07-04": {
+        "dow": "ש",
+        "classification": "דפוס מיוחד (לוח)",
+        "valid": false,
+        "reason": "לוח החרגות: חופש גדול — דפוס שונה, מוצג בנפרד"
+      }
+    }
+  },
+  "mapping_count": 20,
+  "conclusion": {
+    "stride_valid_pct": 0.004138644593895499,
+    "stride_sun_thu_pct": 0.009270704573547589,
+    "bi_aggregate_pct": 0.0253,
+    "gap_pp_vs_bi_aggregate": 0.0211613554061045,
+    "primary_drivers": [
+      "window_exclusion_summer_break_segment",
+      "definition_2_1_1_lower_bound_vs_official_bi",
+      "not_mapping_error_20_mkts_stable"
+    ]
+  }
+}

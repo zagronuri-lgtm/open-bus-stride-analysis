@@ -68,6 +68,20 @@ BI_ANCHORS = {
     },
 }
 
+# עוגני סניף 500 (כיול 08/07 + חקירת 09/07) — אין שליפה חיה Branch=500 בסביבת cloud
+BI_BRANCH_500_ANCHORS = {
+    "aggregate": {
+        "label": "אגרגט סניף 500 (כיול 08/07)",
+        "pct": 0.0253,
+        "note": "METROPOLIN_BRANCHES_AGG; משתמש מדווח 2–3% קבוע",
+    },
+    "day_2026-07-05": {
+        "label": "יום 05/07",
+        "pct": 0.0531,
+        "note": "Stride=BI=5.31% באותו יום",
+    },
+}
+
 # מיפוי שמות סניף: מקומי (קובץ מק״ט) ↔ BI (כיול קודם)
 BRANCH_NAME_MAP = [
     # (local_name, bi_name, note)
@@ -160,14 +174,14 @@ def read_stride_metropoline(weekly_xlsx: Path) -> dict:
                 continue
             planned = int(row[1] or 0)
             executed = int(row[2] or 0)
-            missing = int(row[3] or 0) if row[3] is not None else planned - executed
+            missing = int(row[3] or 0) if len(row) > 3 and row[3] is not None else planned - executed
             out["branches"].append({
                 "branch": name,
                 "planned": planned,
                 "executed": executed,
                 "missing": missing,
                 "missing_pct": (missing / planned) if planned else 0.0,
-                "mkts": row[7],
+                "mkts": row[7] if len(row) > 7 else None,
             })
 
     if "ימים חריגים" in wb.sheetnames:
@@ -380,12 +394,44 @@ def build_calibration_workbook(stride: dict, output_path: Path) -> Path:
         "בדוח השבועי הנוכחי ייתכנו ימים ב-segment (חופש גדול) שלא נכנסים לממוצע.",
         "בדף BI שנבדק אין סנן יום בודד — רק Month מצטבר עד תאריך כספת.",
         "שמות סניף ב-BI עשויים להיות מקוצרים (ב.ע / הנגב) — ראה גיליון מיפוי שמות.",
+        "סניף 500: Stride א׳–ג׳ תקפים ≈0.41% מול עוגן BI ≈2.53%. הפער = חלון (חופש גדול) + הגדרה 2.1.1; המיפוי (20 מק״ט) יציב. ביום 05/07 היה 5.31%=BI.",
+        "פירוט חקירה: outputs/חקירת_סניף_500_*.xlsx ו-python -m src.investigate_branch_500",
     ]
     for i, t in enumerate(notes, start=3):
         ws.cell(i, 1, f"{i-2}.")
         ws.cell(i, 2, t).font = s["base"]
         ws.cell(i, 2).alignment = Alignment(wrap_text=True)
     _autosize(ws, [4, 100])
+
+    # ---- 8. סניף 500 ----
+    ws = wb.create_sheet("סניף 500 — פער")
+    ws.sheet_view.rightToLeft = True
+    ws["A1"] = "סניף 500 — Stride מול עוגני BI"
+    ws["A1"].font = s["title"]
+    _header_row(ws, ["מקור", "%", "הערה"], row=3, styles=s)
+    branch500 = next((b for b in (stride.get("branches") or []) if b["branch"] == "500"), None)
+    rr = 4
+    if branch500:
+        ws.cell(rr, 1, "Stride דוח שבועי (ימי חול תקפים)")
+        ws.cell(rr, 2, branch500["missing_pct"]).number_format = "0.00%"
+        ws.cell(
+            rr, 3,
+            f"מתוכנן={branch500['planned']:,} אי-בוצע={branch500['missing']}",
+        )
+        rr += 1
+    for key, a in BI_BRANCH_500_ANCHORS.items():
+        ws.cell(rr, 1, a["label"])
+        ws.cell(rr, 2, a["pct"]).number_format = "0.00%"
+        ws.cell(rr, 2).fill = s["warn"]
+        ws.cell(rr, 3, a["note"])
+        rr += 1
+    rr += 1
+    ws.cell(rr, 1, "מסקנה").font = Font(name="Arial", bold=True, color="1F4E78")
+    ws.cell(
+        rr, 2,
+        "לא באג מיפוי. להשוות BI Branch=500 לאותו חלון יומי; ראה גיליון רגישות בדוח השבועי.",
+    )
+    _autosize(ws, [40, 12, 70])
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     wb.save(output_path)

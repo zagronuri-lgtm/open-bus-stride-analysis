@@ -568,6 +568,55 @@ def build_records(days: list[DayData], line_mkt: dict, clusters: dict,
     return recs
 
 
+def branch_sensitivity_windows(
+    recs: list[LineDayRecord],
+    days: list[DayData],
+    branch: str = "500",
+) -> list[dict]:
+    """רגישות % אי-ביצוע לסניף מטרופולין לפי חלונות זמן.
+
+    מחזיר רשימת dict עם keys: label, planned, executed, missing, pct, note.
+    משמש לגיליון «סניף 500 — רגישות» ולכיול מול BI (~2–3%).
+    """
+    valid_dates = {d.date for d in days if d.valid and d.is_workday}
+    strike = {(d.date, op) for d in days for op in d.strike_ops}
+    branch_recs = [
+        r for r in recs
+        if r.op == METROPOLINE_OPERATOR_REF and (r.branch or "") == branch
+    ]
+    windows = [
+        (
+            "א׳–ג׳ תקפים (כמו סיכום)",
+            [r for r in branch_recs if r.date in valid_dates and (r.date, r.op) not in strike],
+            "ברירת מחדל בדוח — אחרי classify_days / חופש גדול",
+        ),
+        (
+            "א׳–ה׳ כולל segment",
+            [r for r in branch_recs if r.date.weekday() in WEEKDAY_WORK],
+            "כולל ד׳–ה׳ שסווגו חופש גדול",
+        ),
+        (
+            "כל השבוע",
+            list(branch_recs),
+            "כולל ו׳–ש׳",
+        ),
+    ]
+    out = []
+    for label, subset, note in windows:
+        planned = sum(r.planned for r in subset)
+        executed = sum(r.executed for r in subset)
+        missing = planned - executed
+        out.append({
+            "label": label,
+            "planned": planned,
+            "executed": executed,
+            "missing": missing,
+            "pct": (missing / planned) if planned else 0.0,
+            "note": note,
+        })
+    return out
+
+
 def aggregate_operator(days: list[DayData], recs: list[LineDayRecord]) -> dict:
     """
     אגרגציה פר-מפעיל על ימי חול תקפים בלבד, תוך החרגת מפעילים בחריג-ביצוע נקודתי.
@@ -979,6 +1028,77 @@ def build_workbook(week: tuple[dt.date, dt.date], days: list[DayData],
         rr += 1
     style_body(ws, 4, 7); autosize(ws, [18, 22, 12, 12, 12, 10, 12])
 
+    # ---- רגישות סניף 500 (כיול מול BI 2–3%) ----
+    ws = new_sheet("סניף 500 — רגישות")
+    ws.merge_cells("A1:F1")
+    ws.cell(1, 1, "סניף 500 — רגישות חלונות מול עוגן Power BI (~2.5%)").font = TITLE_FONT
+    ws.merge_cells("A2:F2")
+    ws.cell(
+        2, 1,
+        "הסיכום הראשי משתמש בא׳–ג׳ תקפים בלבד; כאן מוצגים גם חלונות רחבים יותר לכיול. "
+        "Stride=אי-יציאה 2.1.1 בלבד (חסם תחתון)."
+    ).font = Font(name=ARIAL, italic=True, size=9, color="808080")
+    header_row(ws, ["חלון", "מתוכנן", "בוצע", "אי-בוצע", "% אי-ביצוע", "הערה"], row=4)
+
+    all_metro_500 = [r for r in recs if r.op == METROPOLINE_OPERATOR_REF and r.branch == "500"]
+    window_defs = branch_sensitivity_windows(recs, days, branch="500")
+    # עוגני BI שמורים (כיול 08/07) — לא נשלפים חיים בכל הרצה
+    bi_anchor_pct = 0.0253
+    rr = 5
+    for wdef in window_defs:
+        p, e, n = wdef["planned"], wdef["executed"], wdef["missing"]
+        ws.cell(rr, 1, wdef["label"])
+        ws.cell(rr, 2, p).number_format = NUM
+        ws.cell(rr, 3, e).number_format = NUM
+        ws.cell(rr, 4, n).number_format = NUM
+        cell = ws.cell(rr, 5, wdef["pct"])
+        cell.number_format = PCT
+        rate = wdef["pct"]
+        cell.fill = BAD_FILL if rate > THRESH_FUNDAMENTAL else (
+            WARN_FILL if rate > THRESH_SERVICE else OK_FILL)
+        ws.cell(rr, 6, wdef["note"]).font = Font(name=ARIAL, italic=True, size=9, color="808080")
+        rr += 1
+    ws.cell(rr, 1, "עוגן BI אגרגט סניף 500")
+    ws.cell(rr, 5, bi_anchor_pct).number_format = PCT
+    ws.cell(rr, 5).fill = WARN_FILL
+    ws.cell(rr, 6, "מכיול 08/07 (METROPOLIN_BRANCHES_AGG=2.53%); יום 05/07 היה 5.31%=BI")
+    rr += 2
+    ws.cell(rr, 1, "פירוט יומי — סניף 500").font = Font(name=ARIAL, bold=True, color="1F4E78")
+    rr += 1
+    header_row(ws, ["תאריך", "יום", "סיווג", "תקף?", "מתוכנן", "אי-בוצע", "%"], row=rr)
+    day_hdr = rr
+    rr += 1
+    pe500: dict[dt.date, list[int]] = collections.defaultdict(lambda: [0, 0])
+    for r in all_metro_500:
+        pe500[r.date][0] += r.planned
+        pe500[r.date][1] += r.executed
+    for d in days:
+        p, e = pe500.get(d.date, [0, 0])
+        ws.cell(rr, 1, d.date.isoformat())
+        ws.cell(rr, 2, HEB_DOW[d.dow]).alignment = CENTER
+        ws.cell(rr, 3, d.classification)
+        ws.cell(rr, 4, "כן" if (d.valid and d.is_workday) else "לא").alignment = CENTER
+        ws.cell(rr, 5, p).number_format = NUM
+        ws.cell(rr, 6, p - e).number_format = NUM
+        cell = ws.cell(rr, 7)
+        if p == 0:
+            cell.value = "—"
+            cell.alignment = CENTER
+        else:
+            rate = 1 - e / p
+            cell.value = rate
+            cell.number_format = PCT
+            if not (d.valid and d.is_workday):
+                cell.fill = WARN_FILL
+            elif rate > THRESH_FUNDAMENTAL:
+                cell.fill = BAD_FILL
+            elif rate > THRESH_SERVICE:
+                cell.fill = WARN_FILL
+        rr += 1
+    style_body(ws, 5, 6)
+    style_body(ws, day_hdr + 1, 7)
+    autosize(ws, [28, 12, 12, 12, 12, 55])
+
     # ---- גיליון 4: חשיפת קנסות ----
     ws = new_sheet("חשיפת קנסות")
     ws.merge_cells("A1:K1")
@@ -1113,6 +1233,7 @@ def build_workbook(week: tuple[dt.date, dt.date], days: list[DayData],
         ("בוצע", "/siri_rides — דה-דופ לפי journey_ref (journey שמסתיים ב-\"-0\" נספר בנפרד); בוצע ≤ מתוכנן לכל קו."),
         ("הצלבת אשכול", "line_ref → route_mkt (/gtfs_routes על כל השבוע, לא שבת בלבד) → OfficeLineId ב-ClusterToLine.zip."),
         ("הצלבת סניף (מטרופולין)", "route_mkt → סניף מתוך data/reference/metropoline_line_branch_map.csv; קו ללא התאמה → 'לא משויך'."),
+        ("סניף 500 מול BI", "בסיכום הראשי ~0.4% (א׳–ג׳ תקפים) מול עוגן BI ~2.5%. ראה גיליון «סניף 500 — רגישות»: הפער = חלון (חופש גדול) + הגדרה 2.1.1 בלבד; המיפוי (20 מק״ט) יציב. ביום 05/07 היה התאמה 5.31%=BI."),
         ("מפעילי יעד", "אגד, דן, מטרופולין, סופרבוס, קווים, אלקטרה אפיקים."),
         ("ק\"מ", "אורך ה-shape השכיח לכל route_id ב-GTFS הארצי (Haversine)."),
         ("ימי חול", "ראשון–חמישי בלבד. שישי/שבת — דפוס בסיס שונה, מוצגים בנפרד."),

@@ -99,3 +99,43 @@ def test_branch_aggregation_sums_to_metropoline():
     assert sum(by_branch.values()) == total_planned
     assert by_branch["500"] == 10
     assert by_branch[UNASSIGNED_BRANCH] == 5
+
+
+def test_branch_500_mapping_has_expected_mkts():
+    m = load_branch_map(REF_CSV)
+    mkts_500 = sorted(k for k, v in m.items() if v.branch == "500")
+    assert len(mkts_500) == 20
+    assert "11501" in mkts_500
+    assert "11230" in mkts_500  # קו לילה — תורם חסרים יחסיים גבוהים
+    assert "11231" in mkts_500
+
+
+def test_branch_sensitivity_windows():
+    """רגישות: ימים תקפים מול כולל segment."""
+    m = load_branch_map(REF_CSV)
+    d1 = wr.DayData(dt.date(2026, 6, 28))  # Sunday workday
+    d1.valid = True
+    d1.planned = {(15, "501"): 100}
+    d1.executed = {15: {"501": 99}}
+
+    d2 = wr.DayData(dt.date(2026, 7, 1))  # Wednesday — simulate segment invalid
+    d2.valid = False
+    d2.classification = "דפוס מיוחד (לוח)"
+    d2.planned = {(15, "501"): 100}
+    d2.executed = {15: {"501": 90}}
+
+    line_mkt = {(15, "501"): "11501"}
+    clusters = {"11501": "שרון חולון מרחבי"}
+    recs = wr.build_records([d1, d2], line_mkt, clusters, {}, branch_map=m)
+    windows = wr.branch_sensitivity_windows(recs, [d1, d2], branch="500")
+    by_label = {w["label"]: w for w in windows}
+
+    valid = by_label["א׳–ג׳ תקפים (כמו סיכום)"]
+    assert valid["planned"] == 100
+    assert valid["missing"] == 1
+    assert abs(valid["pct"] - 0.01) < 1e-9
+
+    sun_thu = by_label["א׳–ה׳ כולל segment"]
+    assert sun_thu["planned"] == 200
+    assert sun_thu["missing"] == 11
+    assert abs(sun_thu["pct"] - 0.055) < 1e-9
