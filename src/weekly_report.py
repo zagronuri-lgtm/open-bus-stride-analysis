@@ -1,6 +1,7 @@
 """
 דוח אי-ביצוע שבועי לתחבורה ציבורית בישראל — מרובה מפעילים.
-מודד את רכיב אי-היציאה (2.1.1) בלבד = חסם תחתון לשיעור אי-הביצוע הרשמי.
+מודד את רכיב אי-היציאה (2.1.1) בלבד = חסם תחתון לשיעור אי-הביצוע הרשמי
+(ראה docs/definitions.md; תואם ללוגיקת executed≤planned ב-stride_analysis.analysis.execution).
 הרצה:
   python -m src.weekly_report --week-ending 2026-06-27 --output-dir outputs
 אם לא מצוין week-ending: השבוע שהסתיים אתמול (ראשון..שבת).
@@ -8,6 +9,7 @@
 from __future__ import annotations
 import argparse, datetime as dt, math, statistics, io, zipfile, csv, collections
 from concurrent.futures import ThreadPoolExecutor
+from pathlib import Path
 import requests
 
 from src.exclusions_calendar import (
@@ -15,14 +17,20 @@ from src.exclusions_calendar import (
     classify_date,
     load_calendar,
 )
+from src.metropoline_branches import (
+    METROPOLINE_OPERATOR_REF,
+    UNASSIGNED_BRANCH,
+    branch_for_mkt,
+    load_branch_map,
+)
 
 API = "https://open-bus-stride-api.hasadna.org.il"
 GTFS_ZIP = "https://gtfs.mot.gov.il/gtfsfiles/israel-public-transportation.zip"
 CLUSTER_ZIP = "https://gtfs.mot.gov.il/gtfsfiles/ClusterToLine.zip"
 
-OPERATORS = {  # operator_ref -> שם
+OPERATORS = {  # operator_ref -> שם (ששת מפעילי היעד)
     3: "אגד", 5: "דן", 15: "מטרופולין", 16: "סופרבוס",
-    18: "קווים", 25: "אלקטרה אפיקים", 34: "תנופה",
+    18: "קווים", 25: "אלקטרה אפיקים",
 }
 
 # ספים (definitions.md / נספח כ"ו)
@@ -43,7 +51,6 @@ def penalty_tariff(rate: float) -> int:
 P95 = {
     3:  (22475, 628021), 5:  (12112, 194884), 15: (12818, 328707),
     16: (11388, 219985), 18: (13778, 289334), 25: (8061, 155322),
-    34: (2506, 95763),
 }
 
 # קנס קבוע לאשכול-יום שאי-הביצוע בו חורג מ-4.5% (סעיף נספח כ"ו)
@@ -63,6 +70,7 @@ DOUBLE_PLAN_RATIO = 1.7      # מתוכנן >= פי 1.7 מהחציון => כפל
 SIRI_FAULT_RATE = 0.50       # ביצוע/מתוכנן נמוך מ-50% מהרגיל אצל רוב המפעילים => חשד תקלת SIRI
 
 SESSION = requests.Session()
+SESSION.trust_env = False  # התעלם מ-HTTP(S)_PROXY של הסביבה (סנדבוקס Cursor)
 SESSION.headers.update({"Accept": "application/json"})
 
 # שרת ה-GTFS של משרד התחבורה מחזיר דף HTML אם נשלח Accept: application/json —
@@ -169,12 +177,29 @@ def haversine(a, b) -> float:
     h = math.sin(dlat/2)**2 + math.cos(lat1)*math.cos(lat2)*math.sin(dlon/2)**2
     return 2 * R * math.asin(math.sqrt(h))
 
+def _open_zip_from_url_or_local(url: str, local_names: list[str], timeout: int = 600) -> zipfile.ZipFile:
+    """מוריד zip מהרשת; אם נכשל — טוען מקובץ מקומי ב-data/reference/."""
+    ref = Path(__file__).resolve().parent.parent / "data" / "reference"
+    try:
+        content = SESSION.get(url, timeout=timeout, headers=ZIP_HEADERS).content
+        return zipfile.ZipFile(io.BytesIO(content))
+    except Exception as exc:
+        for name in local_names:
+            local = ref / name
+            if local.exists():
+                print(f"[!] הורדה נכשלה ({exc.__class__.__name__}); משתמש ב-{local.name}")
+                return zipfile.ZipFile(local)
+        raise
+
+
 def load_gtfs_lengths() -> dict[str, float]:
     """
     מוריד את ה-GTFS הארצי, מחשב אורך כל route_id (ק"מ) לפי ה-shape השכיח בטריפים שלו.
     הצלבה: route_id == line_ref. מחזיר line_ref(str) -> אורך_ק"מ.
     """
-    z = zipfile.ZipFile(io.BytesIO(SESSION.get(GTFS_ZIP, timeout=600, headers=ZIP_HEADERS).content))
+    z = _open_zip_from_url_or_local(
+        GTFS_ZIP, ["israel-public-transportation.zip"], timeout=600
+    )
 
     def read(name):
         # קבצי ה-GTFS של משרד התחבורה כוללים BOM — utf-8-sig מסיר אותו,
@@ -219,8 +244,9 @@ def load_clusters() -> dict[str, str]:
     """
     מוריד את ClusterToLine.zip ומחזיר מיפוי route_mkt(ללא אפסים מובילים) -> שם אשכול.
     OfficeLineId הוא ה-route_mkt. רשומות פעילות בלבד (ToDate בעתיד).
+    אם ההורדה נכשלת — נופל ל-data/reference/ClusterToLine.zip.
     """
-    z = zipfile.ZipFile(io.BytesIO(SESSION.get(CLUSTER_ZIP, timeout=300, headers=ZIP_HEADERS).content))
+    z = _open_zip_from_url_or_local(CLUSTER_ZIP, ["ClusterToLine.zip"], timeout=300)
     name = z.namelist()[0]
     out: dict[str, str] = {}
     with z.open(name) as f:
@@ -232,14 +258,22 @@ def load_clusters() -> dict[str, str]:
     return out
 
 
-def fetch_line_to_mkt(d: dt.date) -> dict[tuple[int, str], str]:
-    """מיפוי (operator_ref, line_ref) -> route_mkt דרך /gtfs_routes/list, רק למפעילים שלנו."""
+def fetch_line_to_mkt(
+    d: dt.date,
+    date_to: dt.date | None = None,
+) -> dict[tuple[int, str], str]:
+    """מיפוי (operator_ref, line_ref) -> route_mkt דרך /gtfs_routes/list.
+
+    חשוב: לא להסתמך על שבת בלבד — בשבת חסרים קווי חול, ואז route_mkt/אשכול/סניף
+    נשארים ריקים. ברירת מחדל: יום בודד; מומלץ להעביר טווח ראשון..שבת.
+    """
+    end = date_to or d
     out: dict[tuple[int, str], str] = {}
     for op in OPERATORS:
         offset, limit = 0, 5000
         while True:
             r = SESSION.get(f"{API}/gtfs_routes/list", params={
-                "date_from": d.isoformat(), "date_to": d.isoformat(),
+                "date_from": d.isoformat(), "date_to": end.isoformat(),
                 "operator_refs": op, "limit": limit, "offset": offset,
             }, timeout=120)
             r.raise_for_status()
@@ -247,7 +281,10 @@ def fetch_line_to_mkt(d: dt.date) -> dict[tuple[int, str], str]:
             if not rows:
                 break
             for row in rows:
-                out[(op, str(row.get("line_ref")))] = _strip_zeros(row.get("route_mkt"))
+                key = (op, str(row.get("line_ref")))
+                mkt = _strip_zeros(row.get("route_mkt"))
+                if mkt:
+                    out.setdefault(key, mkt)
             if len(rows) < limit:
                 break
             offset += limit
@@ -494,7 +531,7 @@ def classify_days(days: list[DayData], calendar_entries) -> None:
 # ---------- 6+7. הצלבה ברמת (op, line, cluster, day) + אגרגציות ----------
 class LineDayRecord:
     __slots__ = ("date", "dow", "op", "op_name", "line", "mkt", "cluster",
-                 "planned", "executed", "nonexec", "km_per_ride",
+                 "branch", "planned", "executed", "nonexec", "km_per_ride",
                  "planned_km", "executed_km", "nonexec_km")
 
     def __init__(self, **kw):
@@ -503,8 +540,12 @@ class LineDayRecord:
 
 
 def build_records(days: list[DayData], line_mkt: dict, clusters: dict,
-                  route_len: dict) -> list[LineDayRecord]:
-    """רשומת (op,line,cluster,day) עם בוצע=min(SIRI,מתוכנן), אי-ביצוע, וק"מ."""
+                  route_len: dict, branch_map: dict | None = None) -> list[LineDayRecord]:
+    """רשומת (op,line,cluster[,branch],day) עם בוצע=min(SIRI,מתוכנן), אי-ביצוע, וק"מ.
+
+    ``branch`` ממולא למטרופולין בלבד מתוך מיפוי הסניפים; לשאר המפעילים — מחרוזת ריקה.
+    """
+    branch_map = branch_map or {}
     recs: list[LineDayRecord] = []
     for d in days:
         for (op, line), p in d.planned.items():
@@ -512,10 +553,15 @@ def build_records(days: list[DayData], line_mkt: dict, clusters: dict,
                 continue
             ex = min(d.exec_for(op, line), p)
             kmr = route_len.get(line, 0.0)
+            mkt = line_mkt.get((op, line), "")
+            branch = ""
+            if op == METROPOLINE_OPERATOR_REF:
+                branch = branch_for_mkt(mkt, branch_map)
             recs.append(LineDayRecord(
                 date=d.date, dow=HEB_DOW[d.dow], op=op, op_name=OPERATORS[op],
-                line=line, mkt=line_mkt.get((op, line), ""),
+                line=line, mkt=mkt,
                 cluster=cluster_for(op, line, line_mkt, clusters),
+                branch=branch,
                 planned=p, executed=ex, nonexec=p - ex, km_per_ride=round(kmr, 3),
                 planned_km=p * kmr, executed_km=ex * kmr, nonexec_km=(p - ex) * kmr,
             ))
@@ -597,19 +643,28 @@ def measure_inaccuracy(days: list[DayData], recs: list[LineDayRecord]) -> dict:
     if not cand:
         return {"status": "אין נתונים", "detail": "לא נמצאו ימי חול תקפים לדגימה"}
     big = max(cand, key=lambda r: r.planned)
+    sample = f"{OPERATORS[big.op]} קו {big.line} ({big.date.isoformat()})"
 
-    r = SESSION.get(f"{API}/rides_execution/list", params={
-        "date_from": big.date.isoformat(), "date_to": big.date.isoformat(),
-        "operator_ref": str(big.op), "line_ref": str(big.line),
-        "order_by": "planned_start_time asc", "limit": 5000,
-    }, timeout=120)
-    r.raise_for_status()
-    rows = r.json()
+    try:
+        r = SESSION.get(f"{API}/rides_execution/list", params={
+            "date_from": big.date.isoformat(), "date_to": big.date.isoformat(),
+            "operator_ref": str(big.op), "line_ref": str(big.line),
+            "order_by": "planned_start_time asc", "limit": 5000,
+        }, timeout=120)
+        r.raise_for_status()
+        rows = r.json()
+    except Exception as exc:  # noqa: BLE001 — דגימת אי-דיוק לא תפיל את הדוח
+        return {
+            "status": "לא נבדק",
+            "detail": f"rides_execution נכשל עבור {sample}: {type(exc).__name__}: {exc}",
+            "sample": sample, "n": 0, "diffs": 0,
+        }
+
     n = len(rows)
     diffs = sum(1 for x in rows
                 if x.get("actual_start_time") and x.get("planned_start_time")
                 and x["actual_start_time"] != x["planned_start_time"])
-    sample = f"{OPERATORS[big.op]} קו {big.line} ({big.date.isoformat()}, {n} נסיעות)"
+    sample = f"{sample}, {n} נסיעות"
     if n == 0:
         return {"status": "אין נתונים", "detail": f"אין רשומות rides_execution ל-{sample}",
                 "sample": sample, "n": n, "diffs": 0}
@@ -781,6 +836,149 @@ def build_workbook(week: tuple[dt.date, dt.date], days: list[DayData],
         rr += 1
     style_body(ws, 4, 6); autosize(ws, [22, 14, 14, 14, 10, 12])
 
+    # ---- גיליונות מטרופולין לפי סניף ----
+    metro_recs = [
+        r for r in recs
+        if r.op == METROPOLINE_OPERATOR_REF
+        and r.date in valid_dates
+        and (r.date, r.op) not in strike
+    ]
+
+    # סיכום לפי סניף
+    ws = new_sheet("מטרופולין לפי סניף")
+    ws.merge_cells("A1:H1")
+    ws.cell(1, 1, "מטרופולין — אי-ביצוע לפי סניף (ימי-חול תקפים)").font = TITLE_FONT
+    ws.merge_cells("A2:H2")
+    ws.cell(2, 1, "מיפוי מק\"ט→סניף מתוך data/reference/metropoline_line_branch_map.csv").font = \
+        Font(name=ARIAL, italic=True, size=9, color="808080")
+    header_row(ws, ["סניף", "מתוכנן", "בוצע", "אי-בוצע", "% ביצוע", "% אי-ביצוע",
+                    "אי-ביצוע ק\"מ", "קווים (מק\"ט)"], row=4)
+    br_agg: dict[str, collections.Counter] = collections.defaultdict(collections.Counter)
+    br_mkts: dict[str, set] = collections.defaultdict(set)
+    for r in metro_recs:
+        bname = r.branch or UNASSIGNED_BRANCH
+        br_agg[bname]["planned"] += r.planned
+        br_agg[bname]["executed"] += r.executed
+        br_agg[bname]["nonexec"] += r.nonexec
+        br_agg[bname]["nonexec_km"] += r.nonexec_km
+        if r.mkt:
+            br_mkts[bname].add(r.mkt)
+    rr = 5
+    for bname in sorted(br_agg, key=lambda x: -br_agg[x]["planned"]):
+        b = br_agg[bname]
+        ws.cell(rr, 1, bname)
+        ws.cell(rr, 2, b["planned"]).number_format = NUM
+        ws.cell(rr, 3, b["executed"]).number_format = NUM
+        ws.cell(rr, 4, b["nonexec"]).number_format = NUM
+        ws.cell(rr, 5, f"=IF(B{rr}=0,0,C{rr}/B{rr})").number_format = PCT
+        ws.cell(rr, 6, f"=IF(B{rr}=0,0,D{rr}/B{rr})").number_format = PCT
+        ws.cell(rr, 7, round(b["nonexec_km"])).number_format = KM
+        ws.cell(rr, 8, len(br_mkts[bname])).number_format = NUM
+        rate = (b["nonexec"] / b["planned"]) if b["planned"] else 0
+        ws.cell(rr, 6).fill = BAD_FILL if rate > THRESH_FUNDAMENTAL else (
+            WARN_FILL if rate > THRESH_SERVICE else OK_FILL)
+        rr += 1
+    if rr > 5:
+        last = rr - 1
+        tot = rr
+        ws.cell(tot, 1, "סך מטרופולין").font = Font(name=ARIAL, bold=True)
+        for col, letter in [(2, "B"), (3, "C"), (4, "D"), (7, "G")]:
+            ws.cell(tot, col, f"=SUM({letter}5:{letter}{last})").number_format = NUM if col != 7 else KM
+        ws.cell(tot, 5, f"=IF(B{tot}=0,0,C{tot}/B{tot})").number_format = PCT
+        ws.cell(tot, 6, f"=IF(B{tot}=0,0,D{tot}/B{tot})").number_format = PCT
+        for j in range(1, 9):
+            ws.cell(tot, j).fill = HDR_FILL
+            ws.cell(tot, j).font = Font(name=ARIAL, bold=True, color="FFFFFF")
+    style_body(ws, 5, 8); autosize(ws, [18, 12, 12, 12, 10, 12, 14, 12])
+
+    # מטריצה סניף × יום
+    ws = new_sheet("מטרופולין סניף×יום")
+    ws.merge_cells("A1:I1")
+    ws.cell(1, 1, "מטרופולין — % אי-ביצוע לפי סניף × יום").font = TITLE_FONT
+    day_cols = [d for d in days]
+    headers = ["סניף"] + [f"{HEB_DOW[d.dow]} {d.date.strftime('%d/%m')}" for d in day_cols] + ["שבוע"]
+    header_row(ws, headers, row=3)
+    pe_br: dict[tuple[str, dt.date], list[int]] = collections.defaultdict(lambda: [0, 0])
+    pe_br_week: dict[str, list[int]] = collections.defaultdict(lambda: [0, 0])
+    for r in metro_recs:
+        bname = r.branch or UNASSIGNED_BRANCH
+        pe_br[(bname, r.date)][0] += r.planned
+        pe_br[(bname, r.date)][1] += r.executed
+        pe_br_week[bname][0] += r.planned
+        pe_br_week[bname][1] += r.executed
+    # גם ימים לא-תקפים להצגה (מסומנים)
+    for r in recs:
+        if r.op != METROPOLINE_OPERATOR_REF:
+            continue
+        if r.date in valid_dates and (r.date, r.op) not in strike:
+            continue  # כבר נספר ב-metro_recs
+        bname = r.branch or UNASSIGNED_BRANCH
+        pe_br[(bname, r.date)][0] += r.planned
+        pe_br[(bname, r.date)][1] += r.executed
+    branch_names = sorted(
+        {b for (b, _) in pe_br} | set(pe_br_week),
+        key=lambda x: -(pe_br_week.get(x, [0])[0]),
+    )
+    for i, bname in enumerate(branch_names):
+        rr = 4 + i
+        ws.cell(rr, 1, bname).font = Font(name=ARIAL, bold=True)
+        for j, d in enumerate(day_cols, start=2):
+            p, e = pe_br[(bname, d.date)]
+            cell = ws.cell(rr, j)
+            if not d.percentages or p == 0:
+                cell.value = "—"; cell.alignment = CENTER
+            else:
+                rate = 1 - e / p
+                cell.value = rate; cell.number_format = PCT
+                if not d.valid or METROPOLINE_OPERATOR_REF in d.strike_ops:
+                    cell.fill = WARN_FILL
+                elif rate > THRESH_FUNDAMENTAL:
+                    cell.fill = BAD_FILL
+                elif rate > THRESH_SERVICE:
+                    cell.fill = WARN_FILL
+        # סיכום שבוע (ימי חול תקפים בלבד)
+        wp, we = pe_br_week.get(bname, [0, 0])
+        cell = ws.cell(rr, 2 + len(day_cols))
+        if wp == 0:
+            cell.value = "—"; cell.alignment = CENTER
+        else:
+            rate = 1 - we / wp
+            cell.value = rate; cell.number_format = PCT
+            cell.fill = BAD_FILL if rate > THRESH_FUNDAMENTAL else (
+                WARN_FILL if rate > THRESH_SERVICE else OK_FILL)
+    style_body(ws, 4, len(headers))
+    autosize(ws, [18] + [11] * len(day_cols) + [10])
+    note_r = 4 + len(branch_names) + 1
+    ws.cell(note_r, 1,
+            "כתום = יום/מפעיל מוחרג או חריגה מעל 2.1%;  אדום = מעל 2.5%;  — = יום לא-תקף/ללא תכנון"
+            ).font = Font(name=ARIAL, italic=True, size=9, color="808080")
+
+    # סניף × אשכול
+    ws = new_sheet("מטרופולין סניף×אשכול")
+    ws.merge_cells("A1:G1")
+    ws.cell(1, 1, "מטרופולין — אי-ביצוע לפי סניף × אשכול (ימי-חול תקפים)").font = TITLE_FONT
+    header_row(ws, ["סניף", "אשכול", "מתוכנן", "בוצע", "אי-בוצע", "% ביצוע", "% אי-ביצוע"], row=3)
+    sc: dict[tuple[str, str], collections.Counter] = collections.defaultdict(collections.Counter)
+    for r in metro_recs:
+        key = (r.branch or UNASSIGNED_BRANCH, r.cluster or UNASSIGNED_BRANCH)
+        sc[key]["planned"] += r.planned
+        sc[key]["executed"] += r.executed
+        sc[key]["nonexec"] += r.nonexec
+    rr = 4
+    for (bname, cluster) in sorted(sc, key=lambda k: (-sc[k]["planned"], k[0], k[1])):
+        b = sc[(bname, cluster)]
+        ws.cell(rr, 1, bname); ws.cell(rr, 2, cluster)
+        ws.cell(rr, 3, b["planned"]).number_format = NUM
+        ws.cell(rr, 4, b["executed"]).number_format = NUM
+        ws.cell(rr, 5, b["nonexec"]).number_format = NUM
+        ws.cell(rr, 6, f"=IF(C{rr}=0,0,D{rr}/C{rr})").number_format = PCT
+        ws.cell(rr, 7, f"=IF(C{rr}=0,0,E{rr}/C{rr})").number_format = PCT
+        rate = (b["nonexec"] / b["planned"]) if b["planned"] else 0
+        ws.cell(rr, 7).fill = BAD_FILL if rate > THRESH_FUNDAMENTAL else (
+            WARN_FILL if rate > THRESH_SERVICE else OK_FILL)
+        rr += 1
+    style_body(ws, 4, 7); autosize(ws, [18, 22, 12, 12, 12, 10, 12])
+
     # ---- גיליון 4: חשיפת קנסות ----
     ws = new_sheet("חשיפת קנסות")
     ws.merge_cells("A1:K1")
@@ -872,19 +1070,20 @@ def build_workbook(week: tuple[dt.date, dt.date], days: list[DayData],
 
     # ---- גיליון 8: נתוני גלם — מתוכנן מול בוצע לפי קו ----
     ws = new_sheet("גלם — קו×יום")
-    header_row(ws, ["תאריך", "יום", "מפעיל", "אשכול", "route_mkt", "line_ref",
+    header_row(ws, ["תאריך", "יום", "מפעיל", "אשכול", "סניף", "route_mkt", "line_ref",
                     "מתוכנן", "בוצע", "אי-בוצע", "% אי-ביצוע"], row=1)
     rr = 2
     for r in sorted(recs, key=lambda x: (x.date, x.op, -x.nonexec)):
         ws.cell(rr, 1, r.date.isoformat()); ws.cell(rr, 2, r.dow).alignment = CENTER
         ws.cell(rr, 3, r.op_name); ws.cell(rr, 4, r.cluster)
-        ws.cell(rr, 5, r.mkt); ws.cell(rr, 6, r.line)
-        ws.cell(rr, 7, r.planned).number_format = NUM
-        ws.cell(rr, 8, r.executed).number_format = NUM
-        ws.cell(rr, 9, r.nonexec).number_format = NUM
-        ws.cell(rr, 10, f"=IF(G{rr}=0,0,I{rr}/G{rr})").number_format = PCT
+        ws.cell(rr, 5, r.branch or ("—" if r.op != METROPOLINE_OPERATOR_REF else UNASSIGNED_BRANCH))
+        ws.cell(rr, 6, r.mkt); ws.cell(rr, 7, r.line)
+        ws.cell(rr, 8, r.planned).number_format = NUM
+        ws.cell(rr, 9, r.executed).number_format = NUM
+        ws.cell(rr, 10, r.nonexec).number_format = NUM
+        ws.cell(rr, 11, f"=IF(H{rr}=0,0,J{rr}/H{rr})").number_format = PCT
         rr += 1
-    autosize(ws, [11, 5, 14, 18, 10, 10, 9, 9, 9, 11])
+    autosize(ws, [11, 5, 14, 18, 16, 10, 10, 9, 9, 9, 11])
 
     # ---- גיליון 9: ק"מ — מתוכנן מול בוצע ----
     ws = new_sheet("ק\"מ — קו×יום")
@@ -912,7 +1111,9 @@ def build_workbook(week: tuple[dt.date, dt.date], days: list[DayData],
         ("חסם תחתון", "השיעור הרשמי גבוה יותר — כולל גם איחור חמור (2.1.2), הקדמה חמורה (2.1.3) וחפיפה (2.1.4)."),
         ("מתוכנן", "/gtfs_rides_agg/group_by לפי operator_ref,line_ref — total_planned_rides."),
         ("בוצע", "/siri_rides — דה-דופ לפי journey_ref (journey שמסתיים ב-\"-0\" נספר בנפרד); בוצע ≤ מתוכנן לכל קו."),
-        ("הצלבת אשכול", "line_ref → route_mkt (/gtfs_routes) → OfficeLineId ב-ClusterToLine.zip (ללא אפסים מובילים)."),
+        ("הצלבת אשכול", "line_ref → route_mkt (/gtfs_routes על כל השבוע, לא שבת בלבד) → OfficeLineId ב-ClusterToLine.zip."),
+        ("הצלבת סניף (מטרופולין)", "route_mkt → סניף מתוך data/reference/metropoline_line_branch_map.csv; קו ללא התאמה → 'לא משויך'."),
+        ("מפעילי יעד", "אגד, דן, מטרופולין, סופרבוס, קווים, אלקטרה אפיקים."),
         ("ק\"מ", "אורך ה-shape השכיח לכל route_id ב-GTFS הארצי (Haversine)."),
         ("ימי חול", "ראשון–חמישי בלבד. שישי/שבת — דפוס בסיס שונה, מוצגים בנפרד."),
         ("יום מופחת", f"מתוכנן < {int(REDUCED_PLAN_RATIO*100)}% מחציון יום-חול אצל רוב המפעילים — מוחרג מהממוצע."),
@@ -952,13 +1153,17 @@ def run(week_ending: dt.date | None, output_dir: str) -> str:
     print(f"[i] שבוע דיווח: {sun} .. {sat}")
 
     # מקורות עזר (פעם אחת)
-    print("[i] טוען לוח החרגות, אשכולות (ClusterToLine), ואורכי GTFS…")
+    print("[i] טוען לוח החרגות, אשכולות (ClusterToLine), מיפוי סניף מטרופולין, ואורכי GTFS…")
     calendar_entries = load_calendar()
     clusters = load_clusters()
-    line_mkt = fetch_line_to_mkt(sat)   # snapshot ליום אחד מספיק למיפוי mkt/אשכול
+    branch_map = load_branch_map()
+    # טווח מלא של השבוע — לא שבת בלבד (בשבת חסרים קווי חול → "לא משויך")
+    line_mkt = fetch_line_to_mkt(sun, sat)
     route_len = load_gtfs_lengths()
-    print(f"[i] אשכולות: {len(set(clusters.values()))}, קווי-mkt ממופים: {len(line_mkt)}, "
-          f"קווים עם אורך: {len(route_len)}")
+    metro_mapped = sum(1 for (op, _), mkt in line_mkt.items() if op == METROPOLINE_OPERATOR_REF and mkt)
+    print(f"[i] אשכולות: {len(set(clusters.values()))}, קווי-mkt ממופים: {len(line_mkt)} "
+          f"(מטרופולין עם mkt: {metro_mapped}), "
+          f"סניפי מטרופולין: {len(branch_map)}, קווים עם אורך: {len(route_len)}")
 
     # משיכת ימים
     print("[i] מושך מתוכנן + בוצע (SIRI) לכל יום…")
@@ -978,7 +1183,7 @@ def run(week_ending: dt.date | None, output_dir: str) -> str:
         print(f"    {HEB_DOW[d.dow]} {d.date}: {d.classification}{flag}")
 
     # רשומות, אגרגציה, קנסות, אי-דיוק
-    recs = build_records(days, line_mkt, clusters, route_len)
+    recs = build_records(days, line_mkt, clusters, route_len, branch_map=branch_map)
     op_agg = aggregate_operator(days, recs)
     penalties = compute_penalties(days, recs)
     inaccuracy = measure_inaccuracy(days, recs)

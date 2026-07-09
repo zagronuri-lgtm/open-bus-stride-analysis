@@ -5,10 +5,23 @@
 אתה משמש כסוכן קוד ואנליסט תחבורה ציבורית עבור פרויקט Open Bus Stride בישראל.
 המטרה היא לבנות, לתחזק ולשפר כלי Python/HTML/Excel לניתוח תכנון מול ביצוע בתחבורה ציבורית.
 
+## סוכן אי-ביצוע (Skill)
+
+לשאילתות **אי-ביצוע**, תכנון-מול-ביצוע, קנסות נספח כ"ו, או דוח שבועי לפי אשכול/סניף —
+הפעל את הסקיל האישי `israel-transit-non-execution`
+(`~/.cursor/skills/israel-transit-non-execution/SKILL.md`).
+
+**מפעילי יעד:** אגד (3), דן (5), מטרופולין (15), סופרבוס (16), קווים (18), אלקטרה אפיקים (25).  
+**מטרופולין:** פירוט נוסף לפי סניף מתוך `data/reference/metropoline_line_branch_map.csv`.  
+**Power BI (אמת לכיול):** ראה `docs/powerbi_ground_truth.md` — דוח נסיעות/אי-ביצוע להשוואה מול Stride.  
+**CLI:** `python -m src.weekly_report --week-ending YYYY-MM-DD --output-dir outputs`
+
 ## חומרי ידע מחייבים
 
 לפני כל משימה מקצועית, קרא והסתמך על החומרים בתיקיית `docs/`:
 
+- `definitions.md` — הגדרות אי-ביצוע / אי-דיוק / קנסות (נספח כ"ו)
+- `powerbi_ground_truth.md` — קישור Power BI + זרימת כיול מול Stride
 - `OpenBus-Stride-API-Booklet-HE.html`
 - `open-bus-stride-hebrew-handbook-landscape.pdf`
 - - [data.gov.il — מאגר נתוני תחבורה ציבורית](https://data.gov.il/he/datasets?query=%D7%AA%D7%97%D7%91%D7%95%D7%A8%D7%94+%D7%A6%D7%99%D7%91%D7%95%D7%A8%D7%99%D7%AA)
@@ -31,6 +44,7 @@
 8. בניתוחים גדולים העדף חלונות זמן מצומצמים ו־pagination על פני משיכה עיוורת.
 9. שמור תמיד אפשרות לשחזור: URL, params, תאריך ריצה, גרסת קוד.
 10. התוצר צריך להיות ברמת מנהלים: מסקנה, מספרים, מגבלות, המלצה אופרטיבית.
+11. מדד אי-הביצוע בדוח השבועי הוא **אי-יציאה (2.1.1) בלבד** — חסם תחתון לשיעור הרשמי.
 
 ## מבנה תשובה מקצועי
 
@@ -54,6 +68,7 @@ python -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
 pytest
+python -m src.weekly_report --week-ending 2026-06-27 --output-dir outputs
 ```
 
 ## סגנון קוד

@@ -1,4 +1,20 @@
+# --- Core ---
 requests>=2.34.2
 pandas>=2.0
+pyarrow>=14.0          # Parquet engine for the local response cache
+
+# --- Reports & charts ---
+matplotlib>=3.7
+openpyxl>=3.1          # read penalties_workbook.xlsx
+
+# --- Notebooks ---
+jupyter>=1.0
+nbformat>=5.9
+
+# --- Tests ---
 pytest>=9.0.3
-pyarrow>=14.0
+
+# --- Optional (uncomment if used) ---
+# jinja2>=3.1          # render reports via templates/*.j2
+# arabic-reshaper>=3.0 # correct RTL Hebrew labels in charts
+# python-bidi>=0.4

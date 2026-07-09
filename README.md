@@ -1,100 +1,196 @@
-# Open Bus Stride — Codex Integration Pack
+<div dir="rtl">
 
-חבילת עבודה לחיבור חוברות Open Bus Stride API ל־OpenAI Codex.
+# open-bus-stride-analysis
 
-## מה יש כאן
+**ניתוח ביצועי תחבורה ציבורית בישראל — אוניברסלי, דינמי, ומבוסס נתונים.**
 
-- `AGENTS.md` — הוראות פרויקט עבור Codex.
-- `skills/open-bus-transit-analysis/SKILL.md` — Skill ייעודי לניתוח תחבורה ציבורית בישראל.
-- `docs/` — שתי חוברות העבודה שהועלו: HTML + PDF.
-- `src/open_bus_stride_client.py` — לקוח Python בסיסי ובטוח ל־Open Bus Stride API.
-- `src/line_reliability_analyzer.py` — כלי אמינות קו מוקשח עם בדיקות איכות לפני KPI.
-- `src/endpoint_catalog.py` — יצירת קטלוג endpoints מתוך `openapi.json` חי.
-- `src/rtl_dashboard.py` — יצירת דשבורד HTML יחיד בעברית RTL מקובץ reliability CSV.
-- `prompts/` — משימות מוכנות להרצה ב־Codex.
-- `tests/` — בדיקות בסיסיות ללא קריאה לרשת.
+כלי Python מקצועי מעל [Open Bus Stride API](https://open-bus-stride-api.hasadna.org.il)
+לניתוח **תכנון מול ביצוע** של כל מפעיל, כל קו, כל תקופה. שום דבר אינו קבוע מראש
+בקוד: רשימת המפעילים, הקווים והנסיעות נשלפת **דינמית** מה-API — כך אותו קוד משרת
+אוטובוסים, את רכבת ישראל, או קו בודד בעיר בודדת.
 
-## שימוש מומלץ
+---
 
-1. צור Repository חדש ב־GitHub, למשל `open-bus-stride-analysis`.
-2. העלה את כל התיקייה הזו ל־Repository.
-3. חבר את GitHub ל־ChatGPT/Codex.
-4. פתח Codex על ה־Repository.
-5. בקש ממנו לבצע אחת מהמשימות שבתיקיית `prompts/`.
+## מה זה?
 
-## התקנה מקומית
+`stride_analysis` הוא חבילת Python שנותנת תשתית אחידה ל:
+
+- **גילוי** — אילו מפעילים וקווים קיימים (`list_operators`, `list_routes`).
+- **שליפה** — נסיעות מתוכננות מול בפועל (`fetch_rides`), נתוני זמן-אמת (`fetch_siri`).
+- **ניתוח** — אחוז אי-ביצוע, דייקנות, וקנסות לפי נספח כ"ו (`calc_execution`,
+  `calc_punctuality`, `calc_penalties`).
+- **השוואה** — שינוי בין תקופות (`compare_periods`).
+- **דיווח** — דוחות Markdown בעברית (RTL) + תרשימים (`generate_report`, `charts`).
+
+בעתיד: שכבת **בוט** ([stride_analysis/bot/](stride_analysis/bot/README.md)) שתאפשר
+לשאול בשפה טבעית — _"מה הביצועים של דן בשבוע שעבר?"_, _"כמה נסיעות ביטלה רכבת ישראל
+היום?"_.
+
+---
+
+## התקנה
 
 ```bash
-python -m venv .venv
-source .venv/bin/activate
+git clone <repo-url> open-bus-stride-analysis
+cd open-bus-stride-analysis
+python -m venv venv
+source venv/bin/activate          # Windows: venv\Scripts\activate
 pip install -r requirements.txt
-pytest
+cp .env.example .env              # אופציונלי — לשינוי כתובת ה-API
 ```
 
-## יצירת קטלוג Endpoints
+דרישות: Python 3.11+.
 
-הסקריפט מוריד את `openapi.json` החי של Open Bus Stride ומייצר שלושה קבצים:
+---
+
+## שימוש מהיר (CLI)
 
 ```bash
-python -m src.endpoint_catalog \
-  --openapi-url https://open-bus-stride-api.hasadna.org.il/openapi.json \
-  --output-dir docs
+# מי המפעילים שקיימים? (נשלף חי מה-API)
+python -m stride_analysis --list-operators
+
+# מפעיל יחיד, טווח מפורש, עם דוח עברית
+python -m stride_analysis --operator 5 --from 2026-05-24 --to 2026-05-30 --report
+
+# כל המפעילים, השבוע שעבר, עם אומדן קנסות ודוח
+python -m stride_analysis --all --last-week --report
+
+# סינון לקו ציבורי מסוים
+python -m stride_analysis --operator 15 --route 1 --from 2026-05-24 --to 2026-05-24
 ```
 
-פלט צפוי:
+הפלטים נכתבים ל-`data/output/` (CSV + דוח Markdown).
 
-- `docs/endpoint_catalog.csv`
-- `docs/endpoint_catalog.md`
-- `docs/endpoint_catalog.html`
+---
 
-כל רשומה כוללת: group, method, path, required params, optional params, response schema, and analyst use case.
+## שימוש בקוד (Python)
 
-## ניתוח אמינות קו
+```python
+from stride_analysis.data.stride_client import StrideClient
+from stride_analysis.analysis import calc_execution, calc_penalties, load_penalty_tables
+from stride_analysis.reports.generator import generate_report
 
-הכלי מריץ planned vs actual לפי `service_date`, `operator_ref` ו־`line_ref`, ומחזיר CSV + HTML RTL עם KPI, בדיקות איכות, ומטא־דאטה לשחזור. אם לא מספקים `line_ref`, הזיהוי חייב להיות חד־משמעי לאחר סינון לפי `route_mkt`, `route_direction` ו־`route_alternative`; אחרת הריצה תיעצר עם רשימת מועמדים במקום לבחור אוטומטית.
+client = StrideClient()
 
-פקודת דוגמה עם `line_ref` מפורש:
+# 1. גילוי — כל המפעילים (כולל רכבת ישראל), דינמי לחלוטין
+operators = client.list_operators(date="2026-05-28")
+for op in operators[:5]:
+    print(op.operator_ref, op.name, op.route_count)
+
+# 2. שליפה — נסיעות תכנון-מול-ביצוע (operator_ref=None ⇒ כל המפעילים)
+rides = client.fetch_rides("2026-05-24", "2026-05-30", operator_ref=5)   # 5 = דן
+
+# 3. ניתוח — ביצוע + קנסות
+summary = calc_execution(rides, group_by=["operator_ref", "operator_name", "service_date"])
+summary = calc_penalties(summary, load_penalty_tables())
+
+# 4. דיווח — Markdown עברית
+md = generate_report(summary, date_from="2026-05-24", date_to="2026-05-30",
+                     title="דן", daily=summary)
+print(md)
+```
+
+> ה-`operator_ref` בדוגמה הוא פרמטר בלבד — גלו את הקוד הנכון עם `--list-operators`
+> או `client.list_operators()`. שום ref אינו מקודד בקוד.
+
+---
+
+## ארכיטקטורה
+
+```
+stride_analysis/
+├── config.py              כתובת API, נתיבים, ספים, logging
+├── data/
+│   ├── stride_client.py   לקוח גנרי: list_operators, list_routes, fetch_rides, fetch_siri
+│   ├── cache.py           cache מקומי אוטומטי (Parquet/JSON) — לא שולפים פעמיים
+│   └── models.py          dataclasses: Operator, Route, Ride, ExecutionSummary
+├── analysis/
+│   ├── execution.py       planned / executed / missing / missing_pct (גנרי על כל DF)
+│   ├── punctuality.py     late_pct, avg_delay (דורש SIRI — ראו מגבלות)
+│   ├── penalties.py       פרסור אוטומטי של penalties_workbook.xlsx → ₪ למפעיל
+│   └── compare.py         compare_periods — שינוי בין תקופות
+├── reports/
+│   ├── generator.py       generate_report(...) → Markdown עברית RTL
+│   ├── charts.py          create_heatmap / create_bar / create_timeline
+│   └── templates/         תבנית Jinja2 אופציונלית
+├── cli.py                 ממשק שורת פקודה
+└── bot/                   placeholder לבוט שפה-טבעית
+
+data/
+├── raw/         קבצי גלם (trips.csv, gtfs_rides_*.csv, _rides_execution_raw.csv)
+├── cache/       cache אוטומטי של קריאות API  (git-ignored)
+├── reference/   penalties_workbook.xlsx (נספח כ"ו)
+└── output/      דוחות שנוצרו              (git-ignored)
+
+notebooks/
+├── quick_query.ipynb           שאילתה אינטראקטיבית: מפעיל + תאריכים → דוח
+├── weekly_all_operators.ipynb  דוח שבועי לכל המפעילים + תרשימים
+└── archive/onboard_survey.ipynb ניתוח סקר נוסעים היסטורי (trips.csv)
+```
+
+---
+
+## מתודולוגיה ומגבלות
+
+- **GTFS = תכנון, SIRI = ביצוע.** אי-ביצוע מחושב מהתאמת נסיעות מתוכננות לנסיעות
+  בזמן-אמת דרך `/rides_execution/list`. נסיעה ללא התאמה נספרת כ"לא בוצעה".
+- **דייקנות (איחור/הקדמה) אינה נגזרת מ-`/rides_execution/list`** — זמן היציאה
+  בפועל שם מוצמד למתוכנן. לחישוב דייקנות אמיתי השתמשו ב-`fetch_siri()`.
+  `calc_punctuality` מדווח כמה שורות היו מדידות ומחזיר `None` במקום אפס מטעה.
+- **קנסות** מחושבים לפי נספח כ"ו, טבלה 1 (אי-ביצוע מדורג) בלבד — אומדן, ולא כולל
+  קנסות קבועים/בקרה מדגמית/תלונות ציבור. הטבלאות נקראות מהוורקבוק בזמן ריצה.
+- ימי שירות מקובצים לפי שעון ישראל (Asia/Jerusalem).
+- כל דוח כולל סעיף **מגבלות** ו**שחזור** (URL, endpoints, מספר קריאות).
+
+ראו [AGENTS.md](AGENTS.md) לעקרונות העבודה המלאים.
+
+---
+
+## אוטומציות מתוזמנות ולוח החרגות
+
+ארבעה סוכנים מתוזמנים (GitHub Actions) רצים אוטומטית ופותחים PR עם נתונים מעודכנים:
+משיכת מפעילים שבועית, אמינות-קו יומית לפי אשכול (רוטציה), נסועה רבעונית, וקטלוג API.
+
+**מניעת הטיות:** [`src/exclusions_calendar.py`](src/exclusions_calendar.py) מסווג כל
+יום שירות כ-`drop` / `segment` / `keep` / `normal` לפי
+[לוח ההחרגות](data/reference/exclusions_2026/README.md). אמינות-הקו **מדלגת** על
+ימי `drop` (חגים) ו**מחריגה** ימי `segment` (חוה"מ/חופש/עיד) מהממוצע השבועי;
+המשיכה השבועית **מתייגת** אותם. כך חגים ותקופות מגזריות אינם מעוותים את התוצאות.
+
+תיעוד מלא — לוחות זמנים, מטריצת כיסוי, ופערים ידועים: [docs/automation_and_exclusions.md](docs/automation_and_exclusions.md).
+
+---
+
+## בדיקות
 
 ```bash
-python -m src.line_reliability_analyzer \
-  --service-date 2026-05-15 \
-  --operator-ref 3 \
-  --route-short-name 18 \
-  --line-ref 3644 \
-  --hour-from 5 \
-  --hour-to 10 \
-  --output-dir outputs
+pytest                      # בדיקות יחידה, ללא קריאה לרשת
 ```
 
-פקודת דוגמה לזיהוי לפי מאפייני קו, כאשר אין `line_ref` ידוע מראש:
+---
 
-```bash
-python -m src.line_reliability_analyzer \
-  --service-date 2026-05-15 \
-  --operator-ref 3 \
-  --route-short-name 18 \
-  --route-mkt 10018 \
-  --route-direction 1 \
-  --route-alternative "#" \
-  --output-dir outputs
-```
+## Roadmap
 
-הפלט כולל `data_quality` עבור `siri_snapshots`, שיעור `gtfs_ride_id` חסר, תקינות חלון תאריך/שעה, וזהות כיוון/חלופה.
+- [x] לקוח גנרי דינמי (מפעילים, קווים, נסיעות, SIRI) עם cache/retry/logging
+- [x] ניתוח ביצוע + קנסות + השוואת תקופות
+- [x] דוחות Markdown עברית + תרשימים
+- [x] CLI
+- [ ] דייקנות אמיתית מ-SIRI (איחור/הקדמה ברמת תחנה)
+- [ ] ניתוח ברמת קו/כיוון/חלופה (לא רק מפעיל/יום)
+- [ ] קנסות מלאים (טבלאות 2–5, תלונות ציבור)
+- [ ] שכבת בוט שפה-טבעית ([bot/README.md](stride_analysis/bot/README.md))
+- [x] תזמון אוטומטי (4 אוטומציות GitHub Actions) + לוח החרגות למניעת הטיות
+- [ ] העשרת המניפסט בסניף + ייחודיות-קו (לחיבור טיפול ברמת קו)
 
-## יצירת דשבורד RTL
+---
 
-הדשבורד מקבל CSV שנוצר מכלי אמינות הקו ומייצר HTML יחיד, ללא backend, עם KPI, גרף תכנון מול ביצוע לפי שעה, טבלת נסיעות, ואזור מגבלות/איכות נתונים.
+## רכיבים קודמים
 
-```bash
-python -m src.rtl_dashboard \
-  --csv outputs/line_reliability_2026-05-15_op_3_line_3644.csv \
-  --out outputs/line_reliability_dashboard.html \
-  --title "דוח אמינות קו"
-```
+הריפו כולל גם כלים עצמאיים קודמים תחת [src/](src/) (אמינות קו, קטלוג endpoints,
+דשבורד RTL) ו-[skills/](skills/) — ראו [docs/](docs/) לחומרי הרקע על ה-API.
 
-אם לא מעבירים `--out`, הקובץ ייכתב ליד ה־CSV בשם `<csv-name>.dashboard.html`.
+## רישיון
 
-## עקרון עבודה
+ראו [LICENSE](LICENSE).
 
-כל ניתוח חייב להתחיל בזיהוי השאלה התחבורתית, בחירת מקור הנתונים, בדיקת איכות, ורק אז חישוב KPI.
-אין לנחש נתונים. אם חסר נתון — לציין זאת במפורש.
+</div>

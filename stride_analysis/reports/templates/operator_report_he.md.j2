@@ -1,0 +1,57 @@
+<div dir="rtl">
+
+# דוח ביצועי תחבורה ציבורית — {{ title }}
+
+**תקופה:** {{ date_from }} עד {{ date_to }}
+**נוצר:** {{ generated_at }}
+{% if operators %}**מפעילים:** {{ operators }}{% endif %}
+
+---
+
+## תקציר מנהלים
+
+- **נסיעות מתוכננות:** {{ totals.planned | nfmt }}
+- **נסיעות שבוצעו:** {{ totals.executed | nfmt }}
+- **נסיעות שלא בוצעו:** {{ totals.missing | nfmt }} ({{ totals.missing_pct }}%)
+{% if totals.penalty_nis is not none %}- **אומדן קנס אי-ביצוע:** ₪{{ totals.penalty_nis | nfmt }}{% endif %}
+
+{{ headline }}
+
+---
+
+## פירוט לפי מפעיל
+
+{{ operator_table }}
+
+{% if daily_table %}
+---
+
+## פירוט יומי
+
+{{ daily_table }}
+{% endif %}
+
+{% if comparison_table %}
+---
+
+## השוואה לתקופה קודמת
+
+{{ comparison_table }}
+{% endif %}
+
+---
+
+## מגבלות והנחות
+
+{{ limitations }}
+
+---
+
+## שחזור (Provenance)
+
+- **מקור נתונים:** Open Bus Stride API (`{{ base_url }}`)
+- **endpoints:** `/gtfs_routes/list`, `/rides_execution/list`
+- **טבלת קנסות:** נספח כ"ו — `penalties_workbook.xlsx`
+{% if request_count %}- **קריאות API:** {{ request_count }}{% endif %}
+
+</div>

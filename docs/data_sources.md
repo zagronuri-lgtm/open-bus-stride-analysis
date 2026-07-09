@@ -1,3 +1,5 @@
+<div dir="rtl" align="right">
+
 # מקורות נתונים — Open Bus Stride Analysis
 
 מסמך זה מתעד את מקורות הנתונים החיצוניים שבהם הריפו משתמש (או מתעתד להשתמש) לצורך ניתוח תחבורה ציבורית בישראל. כל המקורות צריכים להיות **רשמיים, מתועדים, ובעלי רישיון ברור**.
@@ -19,7 +21,40 @@
 
 ---
 
-## 2. תפוסות באוטובוסים 2022 — סקר עליה (משרד התחבורה)
+## 2. נסועה בקווי אוטובוס — משרד התחבורה
+
+- **URL:** https://data.gov.il/dataset/ridership
+- **CKAN package id:** `ridership`
+- **בעלים:** משרד התחבורה והבטיחות בדרכים
+- **פלטפורמה:** data.gov.il (CKAN)
+- **רישיון:** [Israeli Government Open Data Use Terms](https://data.gov.il/terms)
+- **תדירות עדכון:** רבעונית, בפרסום ידני
+- **תוכן:** נתוני נסועה וקיבולת לפי קו, מפעיל, אשכול, כיוון, שנה ורבעון.
+
+### שדות עיקריים שנצפו
+
+| שדה מקורי | שדה מנורמל | תיאור |
+|---|---|---|
+| `RouteID` | `route_id` | מזהה קו במאגר |
+| `RouteName` | `route_short_name` | מספר קו לציבור |
+| `RouteDirection` | `route_direction` | כיוון |
+| `AgencyName` | `agency_name` | שם מפעיל |
+| `ClusterName` | `cluster_name` | שם אשכול |
+| `WeeklyKM` | `weekly_km` | ק"מ שבועי |
+| `WeeklyPassengers` | `weekly_passengers` | נוסעים שבועיים |
+| `AverageSpeed` | `average_speed` | מהירות ממוצעת |
+| `year` | `year` | שנה |
+| `Q` | `quarter` | רבעון |
+
+### חיבור לכלים הקיימים
+
+- `src/ridership_fetch.py` מגלה את משאב ה־CSV העדכני דרך `package_show`, מושך את הרשומות דרך `datastore_search`, מנרמל עמודות, ושומר CSV תחת `data/raw/ridership_{year}Q{quarter}.csv`.
+- מטא־דאטה קטן נשמר ב־`data/cache/ridership_meta.json` כדי לזהות האם resource_id או `metadata_modified` השתנו.
+- בדיקות יחידה נמצאות ב־`tests/test_ridership_fetch.py` ומבוססות mock CKAN ללא קריאת רשת.
+
+---
+
+## 3. תפוסות באוטובוסים 2022 — סקר עליה (משרד התחבורה)
 
 - **URL:** https://data.gov.il/he/datasets/ministry_of_transport/onboardbusta2022peima1
 - **בעלים:** משרד התחבורה והבטיחות בדרכים
@@ -57,7 +92,7 @@
 
 ---
 
-## 3. GTFS ישראל (משרד התחבורה)
+## 4. GTFS ישראל (משרד התחבורה)
 
 - **URL:** https://gtfs.mot.gov.il/gtfsfiles/israel-public-transportation.zip
 - **תוכן:** לוחות זמנים סטטיים של כל קווי האוטובוס/רכבת בישראל.
@@ -91,3 +126,5 @@
 3. כתוב loader תחת `src/` שמושך נתונים בזמן ריצה (לא לעשות commit לקובץ הגולמי).
 4. הוסף בדיקות תקינות תחת `tests/`.
 5. פתח PR.
+
+</div>

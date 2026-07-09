@@ -22,6 +22,10 @@ env/
 data/cache/
 data/output/
 !data/output/.gitkeep
+data/reference/israel-public-transportation.zip
+data/reference/ClusterToLine.zip
+outputs/*.xlsx
+!outputs/.gitkeep
 
 # --- Jupyter ---
 .ipynb_checkpoints/
