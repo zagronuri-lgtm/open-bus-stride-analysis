@@ -68,12 +68,13 @@ BI_ANCHORS = {
     },
 }
 
-# עוגני סניף 500 (כיול 08/07 + חקירת 09/07) — אין שליפה חיה Branch=500 בסביבת cloud
+# עוגני סניף 500 (כיול 08/07 + חקירת 09/07)
+# ניסיון שליפה חיה Branch=500 נחסם ב-Sign in של Power BI (אין credentials בענן)
 BI_BRANCH_500_ANCHORS = {
     "aggregate": {
         "label": "אגרגט סניף 500 (כיול 08/07)",
         "pct": 0.0253,
-        "note": "METROPOLIN_BRANCHES_AGG; משתמש מדווח 2–3% קבוע",
+        "note": "METROPOLIN_BRANCHES_AGG; משתמש מדווח 2–3% קבוע; לרענון: הדבק BI חי",
     },
     "day_2026-07-05": {
         "label": "יום 05/07",

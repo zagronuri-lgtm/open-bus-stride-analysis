@@ -113,9 +113,10 @@ Power BI הוא **נתוני אמת תפעוליים/רשמיים** להשווא
 | קו 501 | 0 חסרות על 378 מתוכנן באותם ימים |
 | יום 05/07 | Stride=BI=**5.31%** — כשהחלון זהה אין פער |
 
-**שליפת BI חיה Branch=500:** לא זמינה בענן זה (אין browser MCP / auth ל־Power BI).  
-אמת זמנית = עוגן 2.53% + גיליון «הדבק BI חי» ב־`python -m src.branch_500_ground_truth`.  
-לרענון: Reset → Month=`2026-07` → Branch=`500` → Cluster=`All`.
+**שליפת BI חיה Branch=500 (שלב א׳):** ניסיון Playwright headless הגיע ל־`Sign in | Microsoft Power BI` — נדרש אימות ארגוני; אין credentials בענן.  
+ראיה: `/opt/cursor/artifacts/branch500/powerbi_signin_wall.png`.  
+אמת זמנית = עוגן **2.53%** + גיליון «הדבק BI חי» ב־`python -m src.branch_500_ground_truth`.  
+לרענון ידני: Reset → Month=`2026-07` → Branch=`500` → Cluster=`All` → הדבק נסיעות / נסיעות לחישוב / אי ביצוע / תאריך כספת.
 
 ### נתוני אמת לסניף 500 (מה להציג למשתמש)
 

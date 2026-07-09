@@ -138,6 +138,35 @@ def summarize_branch(
         p = slot["planned"]
         slot["pct"] = (slot["missing"] / p) if p else 0.0
 
+    # גלם קו×יום (מקביל לגיליון «גלם — קו×יום» בדוח השבועי, מסונן לסניף)
+    by_mkt_day: list[dict] = []
+    for r in sorted(branch_recs, key=lambda x: (x.date, x.mkt or "", x.line)):
+        d = by_date.get(r.date)
+        in_valid = bool(
+            d and d.valid and d.is_workday and (r.date, r.op) not in strike
+        )
+        by_mkt_day.append(
+            {
+                "date": r.date.isoformat(),
+                "dow": wr.HEB_DOW[r.date.weekday()],
+                "route_mkt": r.mkt or "",
+                "line_ref": r.line,
+                "cluster": r.cluster or "",
+                "planned": r.planned,
+                "executed": r.executed,
+                "missing": r.nonexec,
+                "pct": (r.nonexec / r.planned) if r.planned else 0.0,
+                "in_valid_avg": in_valid,
+                "classification": d.classification if d else "",
+            }
+        )
+
+    night_focus = [
+        row
+        for row in by_mkt_day
+        if row["route_mkt"] in {"11230", "11231"}
+    ]
+
     return {
         "branch": branch,
         "windows": out_windows,
@@ -145,6 +174,8 @@ def summarize_branch(
         "by_mkt_valid": dict(
             sorted(by_mkt.items(), key=lambda kv: -kv[1]["missing"])
         ),
+        "by_mkt_day": by_mkt_day,
+        "night_lines_11230_11231": night_focus,
         "day_classifications": {
             d.date.isoformat(): {
                 "dow": wr.HEB_DOW[d.dow],
@@ -276,6 +307,74 @@ def write_investigation_xlsx(summary: dict, mapping_rows: list[dict], path: Path
     for j, w in enumerate([12, 10, 12, 12, 12, 10], 1):
         ws.column_dimensions[get_column_letter(j)].width = w
 
+    # גלם קו×יום
+    ws = sheet("גלם — קו×יום")
+    ws["A1"] = "סניף 500 — גלם קו×יום (מקביל לדוח השבועי)"
+    ws["A1"].font = title_font
+    header(
+        ws,
+        [
+            "תאריך",
+            "יום",
+            "route_mkt",
+            "line_ref",
+            "אשכול",
+            "מתוכנן",
+            "בוצע",
+            "חסר",
+            "%",
+            "בממוצע תקף?",
+            "סיווג",
+        ],
+        row=3,
+    )
+    rr = 4
+    for row in summary.get("by_mkt_day") or []:
+        ws.cell(rr, 1, row["date"])
+        ws.cell(rr, 2, row["dow"])
+        ws.cell(rr, 3, row["route_mkt"])
+        ws.cell(rr, 4, row["line_ref"])
+        ws.cell(rr, 5, row["cluster"])
+        ws.cell(rr, 6, row["planned"])
+        ws.cell(rr, 7, row["executed"])
+        ws.cell(rr, 8, row["missing"])
+        c = ws.cell(rr, 9, row["pct"])
+        c.number_format = "0.00%"
+        ws.cell(rr, 10, "כן" if row["in_valid_avg"] else "לא")
+        ws.cell(rr, 11, row["classification"])
+        if row["route_mkt"] in {"11230", "11231"} and row["missing"] > 0:
+            for j in range(1, 12):
+                ws.cell(rr, j).fill = warn
+        rr += 1
+    for j, w in enumerate([12, 6, 12, 10, 22, 10, 10, 8, 8, 12, 22], 1):
+        ws.column_dimensions[get_column_letter(j)].width = w
+
+    # קווי לילה 11230/11231
+    ws = sheet("לילה 11230_11231")
+    ws["A1"] = "בדיקה נפרדת — קווי לילה 230/231 (רוב החסרים בא׳–ג׳)"
+    ws["A1"].font = title_font
+    header(
+        ws,
+        ["תאריך", "יום", "route_mkt", "מתוכנן", "בוצע", "חסר", "%", "בממוצע תקף?"],
+        row=3,
+    )
+    rr = 4
+    for row in summary.get("night_lines_11230_11231") or []:
+        ws.cell(rr, 1, row["date"])
+        ws.cell(rr, 2, row["dow"])
+        ws.cell(rr, 3, row["route_mkt"])
+        ws.cell(rr, 4, row["planned"])
+        ws.cell(rr, 5, row["executed"])
+        ws.cell(rr, 6, row["missing"])
+        c = ws.cell(rr, 7, row["pct"])
+        c.number_format = "0.00%"
+        if row["pct"] >= 0.5:
+            c.fill = bad
+        ws.cell(rr, 8, "כן" if row["in_valid_avg"] else "לא")
+        rr += 1
+    for j, w in enumerate([12, 6, 12, 10, 10, 8, 8, 12], 1):
+        ws.column_dimensions[get_column_letter(j)].width = w
+
     # מיפוי
     ws = sheet("מיפוי סניף 500")
     ws["A1"] = "20 מק״ט ממופים לסניף 500 — בדיקה: יציב, לא באג שיוך"
@@ -376,11 +475,15 @@ def run(week_ending: dt.date, output_dir: str) -> Path:
         "week": {"sun": sun.isoformat(), "sat": sat.isoformat()},
         "bi_anchors": BI_BRANCH_500_ANCHORS,
         "bi_live_scrape": {
-            "status": "unavailable_in_cloud",
+            "status": "auth_required",
             "requested_filters": "Month=2026-07 Branch=500 Cluster=All",
-            "blocker": "no browser MCP / Power BI auth in cloud agent",
+            "attempt": "playwright_chromium_headless",
+            "page_title": "Sign in | Microsoft Power BI",
+            "blocker": "Power BI requires work/school sign-in; no credentials in cloud agent",
+            "evidence": "/opt/cursor/artifacts/branch500/powerbi_signin_wall.png",
             "fallback_truth_pct": bi_pct,
             "fallback_source": BI_BRANCH_500_ANCHORS["aggregate_siri_attached"]["note"],
+            "paste_sheet": "python -m src.branch_500_ground_truth → גיליון «הדבק BI חי»",
         },
         "summary": summary,
         "mapping_count": len(mapping_rows),
@@ -428,7 +531,7 @@ def run(week_ending: dt.date, output_dir: str) -> Path:
                 "aggregate_pct": bi_pct,
                 "day_0507_pct": BI_BRANCH_500_ANCHORS["day_2026-07-05"]["pct"],
                 "live_branch_500_scrape": None,
-                "live_scrape_blocker": "no browser MCP / Power BI auth in cloud agent",
+                "live_scrape_blocker": "Power BI sign-in wall (playwright headless)",
             },
         },
         "conclusion": {
