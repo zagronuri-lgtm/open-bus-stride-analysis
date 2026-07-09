@@ -16,7 +16,8 @@
 **Power BI (אמת לכיול):** ראה `docs/powerbi_ground_truth.md` — דוח נסיעות/אי-ביצוע להשוואה מול Stride.  
 **CLI:** `python -m src.weekly_report --week-ending YYYY-MM-DD --output-dir outputs`  
 **חקירת סניף 500:** `python -m src.investigate_branch_500 --week-ending YYYY-MM-DD --output-dir outputs`  
-(ראה `docs/powerbi_ground_truth.md` — פער ~0.4% Stride מול ~2.5% BI הוא חלון+הגדרה, לא באג מיפוי.)
+**נתוני אמת סניף 500 (BI קודם):** `python -m src.branch_500_ground_truth --output-dir outputs`  
+(ראה `docs/powerbi_ground_truth.md` — לדיווח תפעולי השתמש ב־Power BI ~2.5%+, לא ב־0.4% של Stride.)
 
 ## חומרי ידע מחייבים
 
