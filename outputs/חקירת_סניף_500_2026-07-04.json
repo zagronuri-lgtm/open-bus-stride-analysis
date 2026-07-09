@@ -15,6 +15,13 @@
       "note": "Stride=BI=5.31% באותו יום (מקדם רכיב ≈1.0 לאותו חלון)"
     }
   },
+  "bi_live_scrape": {
+    "status": "unavailable_in_cloud",
+    "requested_filters": "Month=2026-07 Branch=500 Cluster=All",
+    "blocker": "no browser MCP / Power BI auth in cloud agent",
+    "fallback_truth_pct": 0.0253,
+    "fallback_source": "METROPOLIN_BRANCHES_AGG ב-create_calibration_workbook.py"
+  },
   "summary": {
     "branch": "500",
     "windows": {
@@ -279,32 +286,71 @@
     }
   },
   "mapping_count": 20,
-  "conclusion": {
-    "stride_valid_pct": 0.004138644593895499,
-    "stride_sun_thu_pct": 0.009270704573547589,
-    "bi_aggregate_pct": 0.0253,
-    "gap_pp_vs_bi_aggregate": 0.0211613554061045,
-    "primary_drivers": [
-      "window_exclusion_summer_break_segment",
-      "definition_2_1_1_lower_bound_vs_official_bi",
-      "not_mapping_error_20_mkts_stable"
-    ]
+  "mapping_audit": {
+    "mapped_mkts": [
+      "10524",
+      "10525",
+      "10531",
+      "10561",
+      "10572",
+      "11230",
+      "11231",
+      "11249",
+      "11501",
+      "11909",
+      "12247",
+      "16024",
+      "19047",
+      "20048",
+      "22006",
+      "23012",
+      "25090",
+      "40091",
+      "59021",
+      "73008"
+    ],
+    "active_on_valid_weekdays": [
+      "10524",
+      "10525",
+      "10531",
+      "10561",
+      "10572",
+      "11230",
+      "11231",
+      "11249",
+      "11501",
+      "16024",
+      "19047",
+      "20048",
+      "22006",
+      "23012",
+      "25090",
+      "40091",
+      "59021",
+      "73008"
+    ],
+    "inactive_on_valid_weekdays": [
+      "11909",
+      "12247"
+    ],
+    "lines_50x_mapped_elsewhere": [],
+    "conclusion": "mapping_stable_not_bug"
   },
   "gap_examples": {
     "numerator_gap": {
       "window": "א׳–ג׳ תקפים",
       "planned": 3866,
       "stride_missing": 16,
-      "needed_for_2_5pct": 97,
-      "missing_gap": 81,
-      "note": "לב הפער: ~81 נסיעות שלא נספרות ב-Stride מול יעד 2.5%"
+      "needed_for_2_5pct": 98,
+      "missing_gap": 82,
+      "note": "לב הפער: נסיעות שלא נספרות ב-Stride מול יעד BI ~2.5%"
     },
     "daily": [
       {
         "date": "2026-06-28",
         "pct": 0.0008,
         "in_avg": true,
-        "note": "שקט"
+        "note": ""
       },
       {
         "date": "2026-06-29",
@@ -316,7 +362,7 @@
         "date": "2026-06-30",
         "pct": 0.0116,
         "in_avg": true,
-        "note": "עדיין מתחת ל-2%"
+        "note": ""
       },
       {
         "date": "2026-07-01",
@@ -331,10 +377,16 @@
         "note": "הוחרג"
       },
       {
+        "date": "2026-07-03",
+        "pct": 0.0,
+        "in_avg": false,
+        "note": "הוחרג"
+      },
+      {
         "date": "2026-07-04",
         "pct": 0.1043,
         "in_avg": false,
-        "note": "10%+ הוחרג"
+        "note": "≈2% אבל הוחרג (חופש גדול)"
       }
     ],
     "hot_lines_valid_days": [
@@ -352,7 +404,7 @@
         "kind": "לילה",
         "missing": 6,
         "planned": 7,
-        "pct": 0.857
+        "pct": 0.8571428571428571
       },
       {
         "mkt": "22006",
@@ -360,12 +412,12 @@
         "kind": "סדיר",
         "missing": 2,
         "planned": 192,
-        "pct": 0.01
+        "pct": 0.010416666666666666
       },
       {
         "mkt": "11501",
         "line": "501",
-        "kind": "סדיר נפח גדול",
+        "kind": "סדיר",
         "missing": 0,
         "planned": 378,
         "pct": 0.0
@@ -383,5 +435,17 @@
       "live_branch_500_scrape": null,
       "live_scrape_blocker": "no browser MCP / Power BI auth in cloud agent"
     }
+  },
+  "conclusion": {
+    "stride_valid_pct": 0.004138644593895499,
+    "stride_sun_thu_pct": 0.009270704573547589,
+    "bi_aggregate_pct": 0.0253,
+    "gap_pp_vs_bi_aggregate": 0.0211613554061045,
+    "primary_drivers": [
+      "window_exclusion_summer_break_segment",
+      "definition_2_1_1_lower_bound_vs_official_bi",
+      "not_mapping_error_20_mkts_stable"
+    ],
+    "fix": "document_gap_plus_sensitivity_sheet_no_count_bug"
   }
 }

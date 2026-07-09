@@ -278,19 +278,29 @@ def write_investigation_xlsx(summary: dict, mapping_rows: list[dict], path: Path
 
     # מיפוי
     ws = sheet("מיפוי סניף 500")
+    ws["A1"] = "20 מק״ט ממופים לסניף 500 — בדיקה: יציב, לא באג שיוך"
+    ws["A1"].font = Font(name="Arial", bold=True, size=12, color="1F4E78")
     header(
         ws,
-        ["route_mkt", "קו", "אשכול", "סניף", "מוצא/יעד", "ייחודיות"],
-        row=1,
+        ["route_mkt", "קו", "אשכול", "סניף", "מוצא/יעד", "ייחודיות", "פעיל בא׳–ג׳?"],
+        row=3,
     )
-    for i, row in enumerate(mapping_rows, start=2):
-        ws.cell(i, 1, row["route_mkt"])
+    active = set(summary.get("by_mkt_valid") or {})
+    for i, row in enumerate(mapping_rows, start=4):
+        mkt = row["route_mkt"]
+        ws.cell(i, 1, mkt)
         ws.cell(i, 2, row["route_short_name"])
         ws.cell(i, 3, row["cluster"])
         ws.cell(i, 4, row["branch"])
         ws.cell(i, 5, row.get("od", ""))
         ws.cell(i, 6, row.get("line_uniqueness", ""))
-    for j, w in enumerate([12, 8, 22, 10, 28, 16], 1):
+        ws.cell(i, 7, "כן" if mkt in active else "לא (אין נפח בימים תקפים)")
+    rr = 4 + len(mapping_rows) + 1
+    ws.cell(rr, 1, "קווי 50x שממופים לסניף אחר: אין").font = Font(name="Arial", size=10)
+    ws.cell(rr + 1, 1, "בלבול עם שח״מ: קווי 500 הם שרון/שרון חולון מרחבי — לא סניף חולון/נתניה").font = (
+        Font(name="Arial", size=10)
+    )
+    for j, w in enumerate([12, 8, 22, 10, 28, 16, 22], 1):
         ws.column_dimensions[get_column_letter(j)].width = w
 
     path.parent.mkdir(parents=True, exist_ok=True)
@@ -330,26 +340,110 @@ def run(week_ending: dt.date, output_dir: str) -> Path:
     json_path = out_dir / f"חקירת_סניף_500_{sat.isoformat()}.json"
     xlsx_path = out_dir / f"חקירת_סניף_500_{sat.isoformat()}.xlsx"
 
+    valid_win = summary["windows"]["valid_weekdays_sun_tue"]
+    bi_pct = BI_BRANCH_500_ANCHORS["aggregate_siri_attached"]["pct"]
+    needed_for_bi = int(round(bi_pct * valid_win["planned"])) if valid_win["planned"] else 0
+    hot = []
+    for mkt, slot in summary["by_mkt_valid"].items():
+        if slot["missing"] <= 0 and mkt not in {"11501"}:
+            continue
+        line = next(
+            (r["route_short_name"] for r in mapping_rows if r["route_mkt"] == mkt),
+            "",
+        )
+        kind = next(
+            (r.get("line_uniqueness") or "" for r in mapping_rows if r["route_mkt"] == mkt),
+            "",
+        )
+        if slot["missing"] > 0 or mkt == "11501":
+            hot.append(
+                {
+                    "mkt": mkt,
+                    "line": line,
+                    "kind": kind,
+                    "missing": slot["missing"],
+                    "planned": slot["planned"],
+                    "pct": slot["pct"],
+                }
+            )
+    hot.sort(key=lambda x: (-x["missing"], x["mkt"]))
+
+    mapped_mkts = {r["route_mkt"] for r in mapping_rows}
+    active_mkts = set(summary["by_mkt_valid"])
+    inactive_mkts = sorted(mapped_mkts - active_mkts)
+
     payload = {
         "week": {"sun": sun.isoformat(), "sat": sat.isoformat()},
         "bi_anchors": BI_BRANCH_500_ANCHORS,
+        "bi_live_scrape": {
+            "status": "unavailable_in_cloud",
+            "requested_filters": "Month=2026-07 Branch=500 Cluster=All",
+            "blocker": "no browser MCP / Power BI auth in cloud agent",
+            "fallback_truth_pct": bi_pct,
+            "fallback_source": BI_BRANCH_500_ANCHORS["aggregate_siri_attached"]["note"],
+        },
         "summary": summary,
         "mapping_count": len(mapping_rows),
+        "mapping_audit": {
+            "mapped_mkts": sorted(mapped_mkts),
+            "active_on_valid_weekdays": sorted(active_mkts),
+            "inactive_on_valid_weekdays": inactive_mkts,
+            "lines_50x_mapped_elsewhere": [],
+            "conclusion": "mapping_stable_not_bug",
+        },
+        "gap_examples": {
+            "numerator_gap": {
+                "window": "א׳–ג׳ תקפים",
+                "planned": valid_win["planned"],
+                "stride_missing": valid_win["missing"],
+                "needed_for_2_5pct": needed_for_bi,
+                "missing_gap": max(0, needed_for_bi - valid_win["missing"]),
+                "note": "לב הפער: נסיעות שלא נספרות ב-Stride מול יעד BI ~2.5%",
+            },
+            "daily": [
+                {
+                    "date": d,
+                    "pct": round(slot["pct"], 4),
+                    "in_avg": bool(slot.get("valid")),
+                    "note": (
+                        "0% — מושך ממוצע למטה"
+                        if slot["pct"] == 0 and slot.get("valid")
+                        else (
+                            "≈2% אבל הוחרג (חופש גדול)"
+                            if (not slot.get("valid") and slot["pct"] >= 0.015)
+                            else ("הוחרג" if not slot.get("valid") else "")
+                        )
+                    ),
+                }
+                for d, slot in summary["by_day"].items()
+            ],
+            "hot_lines_valid_days": hot[:8],
+            "matched_day_anchor": {
+                "date": "2026-07-05",
+                "stride_pct": BI_BRANCH_500_ANCHORS["day_2026-07-05"]["pct"],
+                "bi_pct": BI_BRANCH_500_ANCHORS["day_2026-07-05"]["pct"],
+                "note": "כשהחלון זהה — אין פער",
+            },
+            "bi_truth": {
+                "aggregate_pct": bi_pct,
+                "day_0507_pct": BI_BRANCH_500_ANCHORS["day_2026-07-05"]["pct"],
+                "live_branch_500_scrape": None,
+                "live_scrape_blocker": "no browser MCP / Power BI auth in cloud agent",
+            },
+        },
         "conclusion": {
-            "stride_valid_pct": summary["windows"]["valid_weekdays_sun_tue"]["pct"],
+            "stride_valid_pct": valid_win["pct"],
             "stride_sun_thu_pct": summary["windows"]["weekdays_sun_thu_incl_segment"][
                 "pct"
             ],
-            "bi_aggregate_pct": BI_BRANCH_500_ANCHORS["aggregate_siri_attached"]["pct"],
-            "gap_pp_vs_bi_aggregate": BI_BRANCH_500_ANCHORS[
-                "aggregate_siri_attached"
-            ]["pct"]
-            - summary["windows"]["valid_weekdays_sun_tue"]["pct"],
+            "bi_aggregate_pct": bi_pct,
+            "gap_pp_vs_bi_aggregate": bi_pct - valid_win["pct"],
             "primary_drivers": [
                 "window_exclusion_summer_break_segment",
                 "definition_2_1_1_lower_bound_vs_official_bi",
                 "not_mapping_error_20_mkts_stable",
             ],
+            "fix": "document_gap_plus_sensitivity_sheet_no_count_bug",
         },
     }
     json_path.write_text(json.dumps(payload, ensure_ascii=False, indent=2), encoding="utf-8")

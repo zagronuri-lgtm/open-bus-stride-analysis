@@ -108,6 +108,9 @@ def test_branch_500_mapping_has_expected_mkts():
     assert "11501" in mkts_500
     assert "11230" in mkts_500  # קו לילה — תורם חסרים יחסיים גבוהים
     assert "11231" in mkts_500
+    # קווי תלמידים/שבת שעשויים להיות ללא נפח בימי חול תקפים — עדיין ממופים ל-500
+    assert "11909" in mkts_500
+    assert "12247" in mkts_500
 
 
 def test_branch_sensitivity_windows():

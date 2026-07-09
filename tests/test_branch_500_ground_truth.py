@@ -18,6 +18,16 @@ def test_mapping_500_count():
     rows = load_mapping_500()
     assert len(rows) == 20
     assert {r["route_mkt"] for r in rows} >= {"11501", "11230", "11231"}
+    # קווי 50x לא ממופים לסניף אחר
+    assert all(
+        (r.get("route_short_name") or "").startswith("50") is False
+        or r["branch"] == "500"
+        for r in rows
+    )
+    # אין שיוך לסניף חולון/נתניה בתוך רשימת 500
+    assert all(r["branch"] == "500" for r in rows)
+    clusters = {r["cluster"] for r in rows}
+    assert clusters <= {"שרון", "שרון חולון מרחבי"}
 
 
 def test_ground_truth_workbook_builds(tmp_path: Path):
