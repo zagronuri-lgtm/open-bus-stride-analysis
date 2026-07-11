@@ -87,13 +87,13 @@ def _gtfs_fixtures() -> tuple[pd.DataFrame, pd.DataFrame]:
              "route_short_name": "73",
              "route_long_name": "גני ילדים/היובל-קדומים<->ת. מרכזית נתניה/הורדה-נתניה-10",
              "route_mkt": "22073", "route_direction": "1", "route_alternative": "0",
-             "agency_name": "תנופה", "route_type": "3"},
+             "agency_name": "מפעיל לדוגמה", "route_type": "3"},
             # new mkt in GTFS, same endpoints as the stale map route 99999
             {"id": 2, "date": "2026-07-10", "line_ref": 30001, "operator_ref": 34,
              "route_short_name": "5",
              "route_long_name": "מסוף חריש/איסוף-חריש<->מרכז אריאל-אריאל-20",
              "route_mkt": "88888", "route_direction": "1", "route_alternative": "0",
-             "agency_name": "תנופה", "route_type": "3"},
+             "agency_name": "מפעיל לדוגמה", "route_type": "3"},
         ]
     )
     gtfs_rides = pd.DataFrame(
