@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>קטלוג Endpoints — Open Bus Stride API</title>
+  <style>
+    body { font-family: Arial, sans-serif; direction: rtl; margin: 24px; background: #f8f9fa; }
+    h1 { color: #1a1a2e; }
+    p.subtitle { color: #555; margin-top: -12px; }
+    table { border-collapse: collapse; width: 100%; background: #fff; border-radius: 8px;
+             box-shadow: 0 1px 4px rgba(0,0,0,.1); }
+    th { background: #1a1a2e; color: #fff; padding: 10px 8px; text-align: right; font-size: .85rem; }
+    td { padding: 8px; border-bottom: 1px solid #e0e0e0; font-size: .82rem; vertical-align: top; }
+    tr:last-child td { border-bottom: none; }
+    tr:hover td { background: #f0f4ff; }
+    code { background: #eef; padding: 1px 4px; border-radius: 3px; font-size: .8rem; }
+    .badge { display: inline-block; padding: 2px 8px; border-radius: 12px;
+              font-size: .75rem; font-weight: bold; color: #fff; }
+    .badge-user-cases  { background: #2e86de; }
+    .badge-siri        { background: #e84393; }
+    .badge-gtfs        { background: #27ae60; }
+    .badge-aggregations{ background: #8e44ad; }
+    .badge-other       { background: #7f8c8d; }
+  </style>
+</head>
+<body>
+  <h1>קטלוג Endpoints — Open Bus Stride API</h1>
+  <p class="subtitle">נוצר אוטומטית מ-OpenAPI spec | סך הכל 27 endpoints</p>
+  <table>
+    <thead>
+      <tr>
+        <th>קבוצה</th>
+        <th>שיטה</th>
+        <th>נתיב</th>
+        <th>תיאור</th>
+        <th>פרמטרים חובה</th>
+        <th>פרמטרים אופציונליים</th>
+        <th>מקרה שימוש</th>
+      </tr>
+    </thead>
+    <tbody>
+<tr><td><span class='badge badge-aggregations'>אגרגציות</span></td><td><code>GET</code></td><td><code>/gtfs_rides_agg/group_by</code></td><td>Group By </td><td>date_from, date_to, group_by</td><td>exclude_hours_from, exclude_hours_to</td><td>נסיעות מתוכננות (GTFS)</td></tr>
+<tr><td><span class='badge badge-aggregations'>אגרגציות</span></td><td><code>GET</code></td><td><code>/gtfs_rides_agg/list</code></td><td>List </td><td>date_from, date_to</td><td>limit, offset, get_count, exclude_hours_from, exclude_hours_to</td><td>נסיעות מתוכננות (GTFS)</td></tr>
+<tr><td><span class='badge badge-gtfs'>נתוני GTFS (תכנון)</span></td><td><code>GET</code></td><td><code>/gtfs_agencies/list</code></td><td>List </td><td></td><td>limit, offset, date_from, date_to</td><td>רשימת מפעילים</td></tr>
+<tr><td><span class='badge badge-gtfs'>נתוני GTFS (תכנון)</span></td><td><code>GET</code></td><td><code>/gtfs_ride_stops/get</code></td><td>Get </td><td>id</td><td></td><td>עצירות נסיעה מתוכננת</td></tr>
+<tr><td><span class='badge badge-gtfs'>נתוני GTFS (תכנון)</span></td><td><code>GET</code></td><td><code>/gtfs_ride_stops/list</code></td><td>List </td><td></td><td>limit, offset, get_count, arrival_time_from, arrival_time_to, gtfs_stop_ids, gtfs_ride_ids, gtfs_ride__gtfs_route_id, gtfs_ride__journey_ref_prefix, gtfs_ride__start_time_from, gtfs_ride__start_time_to, gtfs_stop__date_from, gtfs_stop__date_to, gtfs_stop__code, gtfs_stop__city, gtfs_route__date_from, gtfs_route__date_to, gtfs_route__line_refs, gtfs_route__operator_refs, gtfs_route__route_short_name, gtfs_route__route_long_name_contains, gtfs_route__route_mkt, gtfs_route__route_direction, gtfs_route__route_alternative, gtfs_route__agency_name, gtfs_route__route_type, order_by</td><td>עצירות נסיעה מתוכננת</td></tr>
+<tr><td><span class='badge badge-gtfs'>נתוני GTFS (תכנון)</span></td><td><code>GET</code></td><td><code>/gtfs_rides/get</code></td><td>Get </td><td>id</td><td></td><td>נסיעות מתוכננות (GTFS)</td></tr>
+<tr><td><span class='badge badge-gtfs'>נתוני GTFS (תכנון)</span></td><td><code>GET</code></td><td><code>/gtfs_rides/list</code></td><td>List </td><td></td><td>limit, offset, get_count, gtfs_route_id, journey_ref_prefix, start_time_from, start_time_to, gtfs_route__date_from, gtfs_route__date_to, gtfs_route__line_refs, gtfs_route__operator_refs, gtfs_route__route_short_name, gtfs_route__route_long_name_contains, gtfs_route__route_mkt, gtfs_route__route_direction, gtfs_route__route_alternative, gtfs_route__agency_name, gtfs_route__route_type, order_by</td><td>נסיעות מתוכננות (GTFS)</td></tr>
+<tr><td><span class='badge badge-gtfs'>נתוני GTFS (תכנון)</span></td><td><code>GET</code></td><td><code>/gtfs_routes/get</code></td><td>Get </td><td>id</td><td></td><td>מסלולים מתוכננים (GTFS)</td></tr>
+<tr><td><span class='badge badge-gtfs'>נתוני GTFS (תכנון)</span></td><td><code>GET</code></td><td><code>/gtfs_routes/list</code></td><td>List </td><td></td><td>limit, offset, get_count, date_from, date_to, line_refs, operator_refs, route_short_name, route_long_name_contains, route_mkt, route_direction, route_alternative, agency_name, route_type, order_by</td><td>מסלולים מתוכננים (GTFS)</td></tr>
+<tr><td><span class='badge badge-gtfs'>נתוני GTFS (תכנון)</span></td><td><code>GET</code></td><td><code>/gtfs_stops/get</code></td><td>Get </td><td>id</td><td></td><td>תחנות מתוכננות (GTFS)</td></tr>
+<tr><td><span class='badge badge-gtfs'>נתוני GTFS (תכנון)</span></td><td><code>GET</code></td><td><code>/gtfs_stops/list</code></td><td>List </td><td></td><td>limit, offset, get_count, date_from, date_to, code, city</td><td>תחנות מתוכננות (GTFS)</td></tr>
+<tr><td><span class='badge badge-siri'>נתוני SIRI (ביצוע)</span></td><td><code>GET</code></td><td><code>/siri_ride_stops/get</code></td><td>Get </td><td>id</td><td></td><td>עצירות SIRI לנסיעה ספציפית</td></tr>
+<tr><td><span class='badge badge-siri'>נתוני SIRI (ביצוע)</span></td><td><code>GET</code></td><td><code>/siri_ride_stops/list</code></td><td>List </td><td></td><td>limit, offset, get_count, siri_stop_ids, siri_ride_ids, siri_vehicle_location__lon__greater_or_equal, siri_vehicle_location__lon__lower_or_equal, siri_vehicle_location__lat__greater_or_equal, siri_vehicle_location__lat__lower_or_equal, siri_vehicle_location__recorded_at_time_from, siri_vehicle_location__recorded_at_time_to, siri_ride__scheduled_start_time_from, siri_ride__scheduled_start_time_to, gtfs_stop__lat__greater_or_equal, gtfs_stop__lat__lower_or_equal, gtfs_stop__lon__greater_or_equal, gtfs_stop__lon__lower_or_equal, gtfs_date_from, gtfs_date_to, order_by</td><td>עצירות SIRI לנסיעה ספציפית</td></tr>
+<tr><td><span class='badge badge-siri'>נתוני SIRI (ביצוע)</span></td><td><code>GET</code></td><td><code>/siri_rides/get</code></td><td>Get </td><td>id</td><td></td><td>נסיעות SIRI עם נתוני ביצוע</td></tr>
+<tr><td><span class='badge badge-siri'>נתוני SIRI (ביצוע)</span></td><td><code>GET</code></td><td><code>/siri_rides/list</code></td><td>List </td><td></td><td>limit, offset, get_count, gtfs_route__date_from, gtfs_route__date_to, gtfs_route__line_refs, gtfs_route__operator_refs, gtfs_route__route_short_name, gtfs_route__route_long_name_contains, gtfs_route__route_mkt, gtfs_route__route_direction, gtfs_route__route_alternative, gtfs_route__agency_name, gtfs_route__route_type, gtfs_ride__gtfs_route_id, gtfs_ride__journey_ref_prefix, gtfs_ride__start_time_from, gtfs_ride__start_time_to, siri_route_ids, siri_route__line_refs, siri_route__operator_refs, journey_ref_prefix, journey_refs, vehicle_refs, scheduled_start_time_from, scheduled_start_time_to, order_by</td><td>נסיעות SIRI עם נתוני ביצוע</td></tr>
+<tr><td><span class='badge badge-siri'>נתוני SIRI (ביצוע)</span></td><td><code>GET</code></td><td><code>/siri_routes/get</code></td><td>Get </td><td>id</td><td></td><td>מסלולי SIRI (זיהוי קו בזמן אמת)</td></tr>
+<tr><td><span class='badge badge-siri'>נתוני SIRI (ביצוע)</span></td><td><code>GET</code></td><td><code>/siri_routes/list</code></td><td>List </td><td></td><td>limit, offset, get_count, line_refs, operator_refs, order_by</td><td>מסלולי SIRI (זיהוי קו בזמן אמת)</td></tr>
+<tr><td><span class='badge badge-siri'>נתוני SIRI (ביצוע)</span></td><td><code>GET</code></td><td><code>/siri_snapshots/get</code></td><td>Get </td><td>id</td><td></td><td>סטטוס תמונות ETL</td></tr>
+<tr><td><span class='badge badge-siri'>נתוני SIRI (ביצוע)</span></td><td><code>GET</code></td><td><code>/siri_snapshots/list</code></td><td>List </td><td></td><td>limit, offset, get_count, snapshot_id_prefix, order_by</td><td>סטטוס תמונות ETL</td></tr>
+<tr><td><span class='badge badge-siri'>נתוני SIRI (ביצוע)</span></td><td><code>GET</code></td><td><code>/siri_stops/get</code></td><td>Get </td><td>id</td><td></td><td>תחנות SIRI</td></tr>
+<tr><td><span class='badge badge-siri'>נתוני SIRI (ביצוע)</span></td><td><code>GET</code></td><td><code>/siri_stops/list</code></td><td>List </td><td></td><td>limit, offset, get_count, codes, order_by</td><td>תחנות SIRI</td></tr>
+<tr><td><span class='badge badge-siri'>נתוני SIRI (ביצוע)</span></td><td><code>GET</code></td><td><code>/siri_vehicle_locations/get</code></td><td>Get </td><td>id</td><td></td><td>מיקומי רכב מ-SIRI</td></tr>
+<tr><td><span class='badge badge-siri'>נתוני SIRI (ביצוע)</span></td><td><code>GET</code></td><td><code>/siri_vehicle_locations/list</code></td><td>List </td><td></td><td>limit, offset, get_count, siri_vehicle_location_ids, siri_snapshot_ids, siri_ride_stop_ids, recorded_at_time_from, recorded_at_time_to, lon__greater_or_equal, lon__lower_or_equal, lat__greater_or_equal, lat__lower_or_equal, order_by, siri_routes__line_ref, siri_ride__vehicle_ref, siri_routes__operator_ref, siri_rides__schedualed_start_time_from, siri_rides__schedualed_start_time_to, siri_rides__ids, siri_routes__ids</td><td>מיקומי רכב מ-SIRI</td></tr>
+<tr><td><span class='badge badge-siri'>נתוני SIRI (ביצוע)</span></td><td><code>GET</code></td><td><code>/siri_velocity_aggregation/siri_velocity_aggregation</code></td><td>Siri Velocity Aggregation</td><td>recorded_from</td><td>lon_min, lon_max, lat_min, lat_max, rounding_precision</td><td>מהירות ממוצעת לרכב/קו</td></tr>
+<tr><td><span class='badge badge-user-cases'>מקרי שימוש</span></td><td><code>GET</code></td><td><code>/rides_execution/list</code></td><td>List </td><td>date_from, date_to, operator_ref, line_ref</td><td>limit, offset, get_count</td><td>השוואת נסיעות מתוכננות מול ביצוע בפועל</td></tr>
+<tr><td><span class='badge badge-user-cases'>מקרי שימוש</span></td><td><code>GET</code></td><td><code>/route_timetable/list</code></td><td>List </td><td></td><td>limit, offset, get_count, planned_start_time_date_from, planned_start_time_date_to, line_refs</td><td>לוח זמנים מתוכנן לתחנה/קו לתאריך נתון</td></tr>
+<tr><td><span class='badge badge-user-cases'>מקרי שימוש</span></td><td><code>GET</code></td><td><code>/stop_arrivals/list</code></td><td>List </td><td></td><td>limit, offset, get_count, gtfs_stop_id, gtfs_ride_ids</td><td>זמני הגעה בפועל לתחנה (SIRI)</td></tr>
+    </tbody>
+  </table>
+</body>
+</html>
