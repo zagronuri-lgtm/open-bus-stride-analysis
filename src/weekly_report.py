@@ -250,10 +250,21 @@ def load_clusters() -> dict[str, str]:
     return out
 
 
-def fetch_line_to_mkt(d: dt.date) -> dict[tuple[int, str], str]:
-    """מיפוי (operator_ref, line_ref) -> route_mkt דרך /gtfs_routes/list, רק למפעילים שלנו."""
+def fetch_line_to_mkt(dates: "dt.date | list[dt.date]") -> dict[tuple[int, str], str]:
+    """
+    מיפוי (operator_ref, line_ref) -> route_mkt דרך /gtfs_routes/list, רק למפעילים שלנו.
+
+    חשוב: אין להסתפק ב-snapshot של יום שבת. בשבת פועל רק חלק קטן מהקווים, ולכן
+    מיפוי שנבנה משבת בלבד מחמיץ כמחצית מהקווים (מטרופולין: 306 מתוך 614), וכל
+    הקווים החסרים נופלים לאשכול "לא משויך" — מה שמעוות את הפילוח לפי אשכול ואת
+    חישוב הקנסות המדורגים. מקבל תאריך בודד או רשימה; המיפוי הוא איחוד, כאשר
+    תאריך מאוחר יותר ברשימה גובר. מומלץ לקרוא עם [שבת, יום-חול].
+    """
+    if isinstance(dates, dt.date):
+        dates = [dates]
     out: dict[tuple[int, str], str] = {}
-    for op in OPERATORS:
+    for d in dates:
+      for op in OPERATORS:
         offset, limit = 0, 5000
         while True:
             r = SESSION.get(f"{API}/gtfs_routes/list", params={
@@ -343,6 +354,7 @@ class DayData:
         self.reason = ""
         self.strike_ops: set[int] = set()                   # מפעילים עם חריג ביצוע נקודתי
         self.valid = True                                   # נכלל בממוצעים ובחשיפה
+        self.segment: "str | None" = None                   # שם תקופת ה-segment, אם יש
         self.percentages = True                             # האם להציג אחוזים בכלל
 
     def exec_for(self, op: int, line: str) -> int:
@@ -437,9 +449,14 @@ def classify_days(days: list[DayData], calendar_entries) -> None:
             d.valid = False
             continue
         if d.calendar.treatment == "segment":
-            d.classification = "דפוס מיוחד (לוח)"
-            d.reason = f"לוח החרגות: {d.calendar.name} — דפוס שונה, מוצג בנפרד"
-            d.valid = False
+            # segment = "דפוס אמיתי וחוזר אך שונה → מנותח בנפרד, לא נזרק"
+            # (data/reference/exclusions_2026/README.md). היום נשאר תקף ונכלל
+            # בקנסות ובממוצעים; בסיס ההשוואה הוא קבוצת ה-segment עצמה.
+            # פסילת היום כאן ביטלה את כל יולי-אוגוסט ("חופש גדול", 1.7-31.8
+            # ארצי) ואיפסה את חשיפת הקנסות לשישית מהשנה.
+            d.classification = "תקין (segment)"
+            d.reason = f"לוח החרגות: {d.calendar.name} — דפוס שונה, מושווה מול תקופת ה-segment"
+            d.segment = d.calendar.name
 
         if not d.is_workday:
             # שישי/שבת: דפוס בסיס שונה — מוצג בנפרד, לא בממוצעי יום-חול
@@ -973,7 +990,9 @@ def run(week_ending: dt.date | None, output_dir: str) -> str:
     print("[i] טוען לוח החרגות, אשכולות (ClusterToLine), ואורכי GTFS…")
     calendar_entries = load_calendar()
     clusters = load_clusters()
-    line_mkt = fetch_line_to_mkt(sat)   # snapshot ליום אחד מספיק למיפוי mkt/אשכול
+    # איחוד שבת + יום-חול: שבת לבדה מחמיצה כמחצית מהקווים (ראו fetch_line_to_mkt).
+    weekday_ref = next((x for x in reversed(dates) if x.weekday() in WEEKDAY_WORK), sat)
+    line_mkt = fetch_line_to_mkt([sat, weekday_ref])
     route_len = load_gtfs_lengths()
     print(f"[i] אשכולות: {len(set(clusters.values()))}, קווי-mkt ממופים: {len(line_mkt)}, "
           f"קווים עם אורך: {len(route_len)}")
