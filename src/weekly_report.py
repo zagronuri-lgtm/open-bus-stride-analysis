@@ -58,8 +58,11 @@ P95 = {
     34: (2506, 95763),
 }
 
-# קנס קבוע לאשכול-יום שאי-הביצוע בו חורג מ-4.5% (סעיף נספח כ"ו)
-CLUSTER_DAY_FIXED_PENALTY = 5000
+# קנס קבוע 5,000 ₪ — לפי נספח כ"ו מוגדר ברמת קו-יום, לא אשכול-יום
+# (מכרז 5/2021 בקעת אונו, נספח הפיצויים המוסכמים עמ' 261, סעיף 2.2).
+# הנתיב האשכולי נוטרל (fixed_penalty=0) עד מימוש פר-משטר-מכרז —
+# ר' פסק נספח כ"ו 16.8. הסף משמש עדיין לסימון over_threshold בדוח.
+CLUSTER_DAY_FIXED_PENALTY = 5000        # שמור לתיעוד — לא בשימוש בחישוב
 CLUSTER_DAY_FIXED_THRESHOLD = THRESH_PRECISION  # 4.5%
 
 # ימי חול בישראל (Python weekday(): Mon=0 .. Sun=6) — ראשון עד חמישי
@@ -591,7 +594,13 @@ class PenaltyRow:
 def compute_penalties(days: list[DayData], recs: list[LineDayRecord]) -> list[PenaltyRow]:
     """
     חשיפה לכל מפעיל×אשכול×יום-חול-תקף: תעריף לפי שיעור אי-ביצוע יומי באשכול,
-    חשיפה = אי-בוצע × תעריף; + 5,000 ₪ קבוע אם השיעור > 4.5%.
+    חשיפה = אי-בוצע × תעריף.
+
+    הקנס הקבוע (5,000 ₪) נוטרל כאן זמנית: לפי נספח כ"ו הוא מוגדר ברמת
+    קו-יום ("אי ביצוע יומי בקו... 5,000 ₪ לכל יום" — מכרז 5/2021 עמ' 261)
+    ולא ברמת אשכול-יום, והתעריף שונה בין מכרזים. שדה fixed_penalty נשאר 0
+    עד מימוש פר-משטר-מכרז (ר' פסק נספח כ"ו 16.8). over_threshold ממשיך
+    לסמן חציית 4.5% לצורך הדגשה בדוח.
     מחריג ימים לא-תקפים ומפעילים בחריג-ביצוע נקודתי.
     """
     valid_dates = {d.date for d in days if d.valid and d.is_workday}
@@ -616,7 +625,7 @@ def compute_penalties(days: list[DayData], recs: list[LineDayRecord]) -> list[Pe
             date=date_, dow=dow.get(date_, ""), op=op, op_name=OPERATORS[op], cluster=cluster,
             planned=planned, executed=b["executed"], nonexec=b["nonexec"],
             rate=rate, tariff=tariff, exposure=b["nonexec"] * tariff,
-            over_threshold=over, fixed_penalty=CLUSTER_DAY_FIXED_PENALTY if over else 0,
+            over_threshold=over, fixed_penalty=0,   # נוטרל — ר' docstring
         ))
     return rows
 
@@ -665,6 +674,7 @@ def build_workbook(week: tuple[dt.date, dt.date], days: list[DayData],
                    recs: list[LineDayRecord], op_agg: dict,
                    penalties: list[PenaltyRow], inaccuracy: dict, path: str) -> None:
     from openpyxl import Workbook
+    from openpyxl.comments import Comment
     from openpyxl.styles import Font, PatternFill, Alignment, Border, Side
     from openpyxl.chart import BarChart, Reference
     from openpyxl.utils import get_column_letter
@@ -823,6 +833,9 @@ def build_workbook(week: tuple[dt.date, dt.date], days: list[DayData],
     headers = ["תאריך", "יום", "מפעיל", "אשכול", "מתוכנן", "אי-בוצע", "% אי-ביצוע",
                "תעריף ₪/הפרה", "חשיפה משתנה ₪", "קנס קבוע ₪", "סה\"כ ₪"]
     header_row(ws, headers, row=3)
+    ws.cell(3, 10).comment = Comment(
+        "זמני — הקנס הקבוע ברמת קו-יום, ממתין למימוש פר-משטר-מכרז "
+        "(ר' פסק נספח כ\"ו 16.8)", "בקרה")
     rr = 4
     for p in penalties:
         ws.cell(rr, 1, p.date.isoformat()); ws.cell(rr, 2, p.dow).alignment = CENTER
@@ -832,8 +845,9 @@ def build_workbook(week: tuple[dt.date, dt.date], days: list[DayData],
         ws.cell(rr, 7, f"=IF(E{rr}=0,0,F{rr}/E{rr})").number_format = PCT
         ws.cell(rr, 8, p.tariff).number_format = SHK
         ws.cell(rr, 9, f"=F{rr}*H{rr}").number_format = SHK
-        # קנס קבוע חי לפי סף 4.5%
-        ws.cell(rr, 10, f"=IF(G{rr}>{CLUSTER_DAY_FIXED_THRESHOLD},{CLUSTER_DAY_FIXED_PENALTY},0)").number_format = SHK
+        # זמני — הקנס הקבוע ברמת קו-יום, ממתין למימוש פר-משטר-מכרז
+        # (ר' פסק נספח כ"ו 16.8). הנתיב האשכולי נוטרל.
+        ws.cell(rr, 10, 0).number_format = SHK
         ws.cell(rr, 11, f"=I{rr}+J{rr}").number_format = SHK
         if p.over_threshold:
             for j in range(1, 12):
