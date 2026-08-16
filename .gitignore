@@ -22,6 +22,7 @@ env/
 data/cache/
 data/output/
 !data/output/.gitkeep
+outputs/
 
 # --- Jupyter ---
 .ipynb_checkpoints/

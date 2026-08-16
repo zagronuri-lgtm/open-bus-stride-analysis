@@ -42,14 +42,27 @@ THRESH_SERVICE = 0.021      # מעל 2.1% = חריגה מרמת שירות
 THRESH_FUNDAMENTAL = 0.025  # מעל 2.5% = הפרה יסודית
 THRESH_PRECISION = 0.045    # אי-דיוק מעל 4.5% = חריגה
 
-# מדרגות פיצוי לכל הפרה (₪) לפי שיעור אי-ביצוע יומי באשכול
+# מדרג פיצוי-לכל-הפרה (₪) לפי שיעור אי-הביצוע היומי באשכול — נספח כ"ו.
+# הטבלה זהה במכרז 5/2021 (בקעת אונו) ובמכרז 04/2021 (השרון):
+#   "שיעור יומי של כלל הנסיעות באשכול בהן נמצאו חריגות אי ביצוע ...
+#    1.0% 1.5% 63 ... 3.5% 100% 173"
+# מקור: meta.js: ono_37_5593C13A.bin עמ' 260-261; sharon_18_A4848144.bin עמ' 3.
+GRADED_NONEXEC_TABLE: tuple[tuple[float, int], ...] = (
+    (0.010, 0), (0.015, 63), (0.025, 93), (0.030, 118), (0.035, 143), (1.000, 173),
+)
+
+
+def tariff_from_table(rate: float, table: tuple = GRADED_NONEXEC_TABLE) -> int:
+    """תעריף-להפרה לפי טבלת מדרגות: המדרגה הראשונה ש-rate ≤ גבולה העליון."""
+    for upper, tariff in table:
+        if rate <= upper:
+            return tariff
+    return table[-1][1]
+
+
 def penalty_tariff(rate: float) -> int:
-    if rate <= 0.01:  return 0
-    if rate <= 0.015: return 63
-    if rate <= 0.025: return 93
-    if rate <= 0.03:  return 118
-    if rate <= 0.035: return 143
-    return 173
+    """מדרג 0-173 ₪ להפרה (מכרזי 2021) — ר' GRADED_NONEXEC_TABLE."""
+    return tariff_from_table(rate)
 
 # בסיס P95 ליום חול (חושב 10.6.2026): (נסיעות, ק"מ)
 P95 = {
@@ -58,12 +71,257 @@ P95 = {
     34: (2506, 95763),
 }
 
-# קנס קבוע 5,000 ₪ — לפי נספח כ"ו מוגדר ברמת קו-יום, לא אשכול-יום
-# (מכרז 5/2021 בקעת אונו, נספח הפיצויים המוסכמים עמ' 261, סעיף 2.2).
-# הנתיב האשכולי נוטרל (fixed_penalty=0) עד מימוש פר-משטר-מכרז —
-# ר' פסק נספח כ"ו 16.8. הסף משמש עדיין לסימון over_threshold בדוח.
-CLUSTER_DAY_FIXED_PENALTY = 5000        # שמור לתיעוד — לא בשימוש בחישוב
+# הנתיב האשכולי הישן של קנס קבוע 5,000 ₪ לאשכול-יום נשאר מת לצמיתות:
+# נספח כ"ו מגדיר את הקנס הקבוע ברמת קו-יום (מכרז 5/2021 עמ' 261 §2.2), והוא
+# ממומש כעת פר-משטר-מכרז ב-TENDER_REGIMES (ר' compute_penalties). שדה
+# fixed_penalty ב-PenaltyRow נשאר 0 תמיד. הסף משמש לסימון over_threshold בלבד.
 CLUSTER_DAY_FIXED_THRESHOLD = THRESH_PRECISION  # 4.5%
+
+# "קו בתדירות נמוכה - קו אשר ביום נתון 100% מנסיעות הקו לכיוון מסוים, כמוגדר
+#  ברישוי, הן בתדירות של 59 דקות ומעלה" (5/2021 עמ' 261; זהה ב-04/2021 עמ' 3)
+LOW_FREQ_HEADWAY_MIN = 59
+
+# חלון "אחרי חצות" מקומי (00:00-03:59) — יציאה בו מעידה על זיהום חלון ה-UTC
+# היומי בזנבות של יום-השירות הקודם/הבא (ר' docstring של is_low_frequency).
+NIGHT_WINDOW_END_HOUR = 4
+
+
+def is_low_frequency(planned: int,
+                     times: "list[dt.datetime] | None") -> "bool | None":
+    """
+    האם קו-יום הוא 'קו בתדירות נמוכה' (נספח כ"ו, מכרזי 5/2021 ו-04/2021):
+    "קו אשר ביום נתון 100% מנסיעות הקו לכיוון מסוים, כמוגדר ברישוי, הן
+    בתדירות של 59 דקות ומעלה".
+
+    ההגדרה החוזית דורשת ש-100% מהנסיעות יעמדו במרווח ≥59 דק' — כלומר
+    המרווח-העוקב ה*מינימלי* בין כל זוג נסיעות סמוכות חייב להיות ≥59 דק'.
+    מרווח ממוצע אינו שקול: קו 06:00/06:15/06:30/18:00 (ממוצע 240 דק') הוא
+    קו רגיל — המרווחים העוקבים של 15 דק' מפרים את ההגדרה.
+
+    times = רשימה ממוינת של זמני scheduled_start_time מקומיים ייחודיים
+    שנצפו ב-SIRI לקו-יום (fetch_executed).
+
+    planned = סך הנסיעות המתוכננות לקו-יום, אחרי קאפ כפל-התכנון
+    (apply_double_planning_cap). הסיווג עצמו מבוסס זמנים-נצפים בלבד;
+    planned משמש רק לכלל הנסיעה-הבודדת ולשומר הזמנים-החלקיים שלהלן.
+    אינטראקציה עם הקאפ: הקאפ רק מקטין את planned, ולכן מרכך את שומר
+    הזמנים-החלקיים (len(times) < planned); בקצה, planned שהוקטן ל-1
+    יסווג תדירות-נמוכה מכלל הנסיעה-הבודדת גם אם נצפו כמה זמנים.
+
+    כללי הכרעה (בסדר):
+    * planned <= 0 — None (לא-ניתן-לקביעה).
+    * חציית-חצות: הזמנים נאספים מחלון UTC של יום קלנדרי מקומי, ולכן קו
+      עם יציאות בחלון 00:00-03:59 מקומי עלול לכלול יציאות אחרי-חצות של
+      יום-השירות הקודם ולהחסיר את זנב היום עצמו — המרווחים מזוהמים.
+      אין כלל-שיוך אמין ליום-שירות (ולא ממציאים אחד), לכן יציאה כלשהי
+      ב-00:00-03:59 ⇒ None. תיקון בכיוון השמרני בלבד: קו כזה לעולם לא
+      מסווג תדירות-נמוכה.
+    * planned == 1 — True: נסיעה מתוכננת אחת ביום, אין לה נסיעה עוקבת
+      במרווח קצר מ-59 דק' — כל נסיעותיה 'נסיעות לא תדירות' (כלל מבוסס
+      תכנון בלבד, אינו תלוי בזמנים הנצפים).
+    * אין זמנים נצפים — None (planned >= 2 ללא זמני-יציאה).
+    * len(times) < planned — זמנים חלקיים: המרווח-העוקב האמיתי יכול רק
+      להיות קטן מהנצפה (נסיעות חסרות מפצלות מרווחים), ולכן סיווג
+      'תדירות נמוכה' מזמנים חלקיים אינו בטוח ⇒ None.
+    * אחרת: תדירות-נמוכה ⇔ המרווח-העוקב המינימלי ≥ 59 דק'.
+      planned == 2: הפער היחיד בין שתי הנסיעות מכריע.
+
+    מחזיר None כשלא ניתן לקבוע — הקו מטופל אז כקו רגיל והדבר מדווח
+    (_regime_line_components), לא מנוחש.
+    """
+    if planned <= 0:
+        return None
+    if times and any(t.hour < NIGHT_WINDOW_END_HOUR for t in times):
+        return None
+    if planned == 1:
+        return True
+    if not times:
+        return None
+    if len(times) < planned:
+        return None
+    min_gap = min((t2 - t1).total_seconds() / 60.0
+                  for t1, t2 in zip(times, times[1:]))
+    return min_gap >= LOW_FREQ_HEADWAY_MIN
+
+
+# ============================================================================
+# משטרי-קנס פר-מכרז (נספח כ"ו) — מקור-האמת: חילוץ המכרזים (פסק נספח כ"ו 16.8).
+# כל תעריף מלווה בציטוט והפניה למקור. עקרונות:
+#   * רכיב שסכומו/הגדרתו לא נלכדו במקור — אינו מתומחר, מסומן ב-not_found
+#     ומופיע בעמודת "פירוט רכיבים / לא נמצא במקור" בדוח. לעולם לא מנוחש.
+#   * רכיב שמוגדר במקור אך אינו ניתן לחישוב מנתוני הדוח (ספירות אי-יציאה
+#     בלבד) — מתועד ב-not_computable ואינו מתומחר. לכן החשיפה במשטרי 2021
+#     (בקרה אלקטרונית) = חסם תחתון.
+#   * משטרים ישנים (24/2015, 07/2014): הטריגר החוזי הוא "אירוע" מתועד
+#     (דיווח פקח משה"ת / מוסמך מטעם המפקח / תלונת ציבור מוצדקת), לא בקרה
+#     אלקטרונית על כלל הנסיעות — התמחור פר-נסיעת-SIRI הוא תקרת-חשיפה
+#     תיאורטית, לא חסם תחתון. מתועד ברכיב trigger_note של המשטר ומופיע
+#     בעמודת הפירוט בדוח.
+#   * אשכול שאינו ב-TENDER_REGIMES אינו מתומחר בשקט: regime="לא-ממופה"
+#     והשורה מסומנת בדוח.
+# ============================================================================
+_REGIME_ONO_ELAD = {
+    "name": "מכרז 5/2021 — בקעת אונו (אונו-אלעד)",
+    "graded": {
+        "table": GRADED_NONEXEC_TABLE,
+        "label": "מדרג אשכול-יומי 0-173 ₪/הפרה",
+        "quote": "שיעור יומי של כלל הנסיעות באשכול בהן נמצאו חריגות אי ביצוע"
+                 " ... 1.0% 1.5% 63 ... 3.5% 100% 173",
+        "ref": "meta.js: ono_37_5593C13A.bin עמ' 260-261 (נספח פיצויים מוסכמים)",
+    },
+    "line_over_threshold": {
+        "amount": 5000,
+        "threshold": 0.045,
+        "label": "§2.2 אי-ביצוע יומי בקו > 4.5% — 5,000 ₪ לקו-יום",
+        "quote": "2.2 אי ביצוע יומי בקו שאינו מוגדר כקו בתדירות נמוכה עולה על"
+                 " 4.5% - 5,000 ₪ לכל יום",
+        "ref": "meta.js: ono_37_5593C13A.bin עמ' 261, §2.2",
+    },
+    "infrequent_ride": {
+        "amount": 5000,
+        "label": "§2.3 אי-ביצוע נסיעה לא תדירה (קו בתדירות נמוכה) — 5,000 ₪/נסיעה",
+        "quote": "2.3 אי ביצוע של נסיעה לא תדירה – 5,000 ₪ לאירוע",
+        "ref": "meta.js: ono_37_5593C13A.bin עמ' 261, §2.3 — הניתוב: קו בתדירות"
+               " נמוכה מוחרג מ-§2.2 אך כל נסיעותיו 'לא תדירות' מעצם ההגדרה",
+    },
+    "not_found": [
+        "מדרג האיחור §2.5.1 — הטבלה לא נלכדה בחילוץ (unresolved) — לא תומחר",
+    ],
+    "not_computable": [
+        "§2.4 נסיעה אחרונה ביום (5,000 ₪) — זיהוי הנסיעה האחרונה דורש לוח-רישוי מלא",
+        "§2.5.2 מדרג הקדמה (0-143 ₪) — אי-דיוק לא מדיד בנתוני המקור",
+        "§2.9 תוספת תלונות ציבור (200/150 ₪) — אין נתוני תלונות",
+        "§2.10 בקרה מדגמית — הדוח מבוסס בקרה אלקטרונית",
+        "§§5-6 הצמדה למדד 2/2012 והכפלה בשנה האחרונה — לא הוחלו (סכומים נומינליים)",
+        "נסיעות לא תדירות בודדות בקווים רגילים (פער-לו\"ז ≥59 דק' לנסיעה"
+        " העוקבת) אינן מזוהות פר-נסיעה ואינן מתומחרות — תת-ספירה",
+        "סיווגי אי-ביצוע 2.1.2-2.1.4 (איחור>20 דק', הקדמה≥10 דק', יציאה אחרי"
+        " הנסיעה העוקבת) אינם מדידים — שיעור האשכול ומניין ההפרות הם חסם תחתון",
+    ],
+}
+
+_REGIME_SHARON = {
+    "name": "מכרז 04/2021 — השרון",
+    "graded": {
+        "table": GRADED_NONEXEC_TABLE,
+        "label": "מדרג אשכול-יומי 0-173 ₪/הפרה",
+        "quote": "שיעור יומי של כלל הנסיעות באשכול בהן נמצאו חריגות אי ביצוע"
+                 " ... 1.0% 1.5% 63 ... 3.5% 100% 173",
+        "ref": "meta.js: sharon_18_A4848144.bin עמ' 3 (העיגון הסעיפי המדויק"
+               " לא חד-משמעי בחילוץ — כותרת הטבלה קושרת אותה לאי-ביצוע)",
+    },
+    "line_over_threshold": {
+        "amount": 500,
+        "threshold": 0.045,   # ביצוע < 95.5% ⇔ אי-ביצוע > 4.5%
+        "label": "§2.1 ביצוע < 95.5% לתקופת-יום — 500 ₪ (חסם תחתון: תקופה אחת מתוך עד 3)",
+        "quote": "2.1 ביצוע נמוך מ-95.5%, לתקופת יום בקו שאינו מוגדר כקו"
+                 " בתדירות נמוכה - 500 ₪",
+        "ref": "meta.js: sharon_18_A4848144.bin עמ' 3, §2.1; עד 3 קנסות ביום"
+               " (תקופת-יום בנפרד): sharon_14 עמ' 48, שאלה 153",
+        # אין בנתוני הדוח פיצול לתקופות-יום (המתוכנן ללא זמני-יציאה). יום
+        # שביצועו הכולל < 95.5% מכיל בהכרח לפחות תקופת-יום אחת < 95.5%
+        # (ממוצע משוקלל) — לכן תומחרה תקופה אחת בלבד = חסם תחתון, לא ניחוש.
+    },
+    "infrequent_ride": {
+        "amount": 5000,
+        "label": "§2.2 אי-ביצוע נסיעה לא תדירה (קו בתדירות נמוכה) — 5,000 ₪/נסיעה",
+        "quote": "2.2 אי ביצוע של נסיעה לא תדירה – 5,000 ₪ לאירוע",
+        "ref": "meta.js: sharon_18_A4848144.bin עמ' 3, §2.2; ניתוב קו בתדירות"
+               " נמוכה: מוחרג מ-§2.1 אך כל נסיעותיו 'לא תדירות' (שאלת-הבהרה 152)",
+    },
+    "not_found": [
+        "§2.3 אי-ביצוע נסיעה אחרונה ביום — הסעיף קיים (sharon_14 עמ' 44-45,"
+        " שאלה 145) אך סכומו לא נלכד במקור — לא תומחר",
+    ],
+    "not_computable": [
+        "מדרג איחור §2.4.1 (0-121 ₪) ומדרג הקדמה §2.4.2 (0-143 ₪) — אי-דיוק לא מדיד",
+        "פיצוי מוגדל 130K/43K ₪ לכל 0.1% — מנגנון לתקופת-בקרה (סעיף 2.25), לא שבועי",
+        "§2.8 תוספת תלונות ציבור; §2.10 בקרה מדגמית — אין נתונים",
+        "§§5-6 הצמדה למדד 2/2012 והכפלה בשנה האחרונה — לא הוחלו (סכומים נומינליים)",
+        "נסיעות לא תדירות בודדות בקווים רגילים (פער-לו\"ז ≥59 דק' לנסיעה"
+        " העוקבת) אינן מזוהות פר-נסיעה ואינן מתומחרות — תת-ספירה",
+        "סיווגי אי-ביצוע 2.1.2-2.1.4 (איחור>20 דק', הקדמה≥10 דק', יציאה אחרי"
+        " הנסיעה העוקבת) אינם מדידים — שיעור האשכול ומניין ההפרות הם חסם תחתון",
+    ],
+}
+
+_REGIME_SHARON_HOLON = {
+    "name": "מכרז 24/2015 — שרון-חולון מרחבי",
+    # אין במכרז זה מנגנון תקופת-יום, כלל 4.5%, טבלת-מדרגות או מושג
+    # 'קו בתדירות נמוכה' — חיפוש ממצה ב-meta.js על כל עמודי 24/2015.
+    "flat_per_ride": {
+        "amount": 2000,
+        "label": "אי-ביצוע נסיעה — 2,000 ₪/אירוע (לפני מקדם הכפלה)",
+        "quote": "אי ביצוע נסיעה 2,000 אירוע",
+        "ref": "meta.js: נספח כו' 24/2015, עמ' 263, טבלת §2 'לוח זמנים'",
+    },
+    # הטריגר החוזי לקנס במשטר זה הוא "אירוע" מתועד — לא בקרה אלקטרונית על
+    # כלל הנסיעות. התמחור פר-נסיעת-SIRI שלא בוצעה הוא לכן תקרת-חשיפה
+    # תיאורטית (כאילו כל אי-יציאה תועדה כאירוע), לא חסם תחתון.
+    "trigger_note": (
+        "הטריגר החוזי במכרז 24/2015 הוא אירוע מתועד (דיווח פקח משרד"
+        " התחבורה / מוסמך מטעם המפקח / תלונת ציבור מוצדקת), לא בקרה"
+        " אלקטרונית על כלל הנסיעות — התמחור פר-נסיעת-SIRI הוא תקרת-חשיפה"
+        " תיאורטית, לא חסם תחתון"
+    ),
+    "not_found": [
+        "מקדם ההכפלה שנקב המפעיל (1-5, מספרים טבעיים — עמ' 266+55) לא נמצא —"
+        " תומחר לפני מקדם (מקדם ≥ 1 לא הוחל)",
+        "אי-ביצוע בקו הזנה לרכבת — הסכום משובש בחילוץ ('00522') — לא תומחר בנפרד",
+    ],
+    "not_computable": [
+        "חריגה מלו\"ז (500 ₪; 750 ₪ בקו הזנה) — אי-דיוק לא מדיד",
+        "הצמדה למדד 2/2012 — לא הוחלה (סכומים נומינליים)",
+    ],
+}
+
+_REGIME_NEGEV = {
+    "name": "מכרז 07/2014 — הנגב",
+    # אין במכרז זה מנגנון תקופת-יום, כלל 4.5%, טבלת-מדרגות או מושג
+    # 'קו בתדירות נמוכה' — חיפוש ממצה ב-meta.js על כל עמודי 07/2014.
+    "flat_per_ride": {
+        "amount": 2000,
+        "label": "אי-ביצוע נסיעה — 2,000 ₪/אירוע (לפני מקדם הכפלה)",
+        "quote": "אי ביצוע נסיעה 2,000 אירוע",
+        "ref": "meta.js: נספח כו' – פיצויים מוסכמים (קנסות) 07/2014, עמ' 316",
+    },
+    # ר' ההערה המקבילה ב-24/2015: הטריגר החוזי הוא אירוע מתועד, לא בקרה
+    # אלקטרונית — התמחור פר-נסיעה הוא תקרת-חשיפה תיאורטית, לא חסם תחתון.
+    "trigger_note": (
+        "הטריגר החוזי במכרז 07/2014 הוא אירוע מתועד (דיווח פקח משרד"
+        " התחבורה / מוסמך מטעם המפקח / תלונת ציבור מוצדקת), לא בקרה"
+        " אלקטרונית על כלל הנסיעות — התמחור פר-נסיעת-SIRI הוא תקרת-חשיפה"
+        " תיאורטית, לא חסם תחתון"
+    ),
+    "not_found": [
+        "מקדם ההכפלה שנקב המפעיל (§28.5.4.2, מספרים טבעיים) לא נמצא —"
+        " תומחר לפני מקדם (מקדם ≥ 1 לא הוחל)",
+    ],
+    "not_computable": [
+        "אי-ביצוע בקו הזנה לרכבת (2,500 ₪) — אין סיווג קווי-הזנה בנתוני הדוח",
+        "חריגה מלו\"ז (500 ₪; 750 ₪ בקו הזנה) — אי-דיוק לא מדיד",
+    ],
+}
+
+# מיפוי אשכול (ClusterName כפי שמופיע ב-ClusterToLine.zip) -> משטר-מכרז.
+# המשטרים כאן הם משטרי מכרזי מטרופולין בלבד, ולכן התמחור לפיהם מותנה גם
+# במפעיל (METROPOLINE_REF) — שומר-המפעיל נאכף בנקודת ה-lookup של
+# compute_penalties; שורת מפעיל אחר אינה מתומחרת ומסומנת כמו לא-ממופה.
+# הערה עובדתית: 'צפון הנגב' בקובץ הארצי הוא אשכול של המפעיל "דן בדרום"
+# (130 שורות ב-ClusterToLine.zip), לא של מטרופולין — הוא אינו ממופה כאן.
+# אשכול הנגב של מטרופולין מופיע בקובץ כ-'הנגב' (90 שורות).
+TENDER_REGIMES: dict[str, dict] = {
+    "בקעת אונו אלעד": _REGIME_ONO_ELAD,
+    "שרון": _REGIME_SHARON,
+    "שרון חולון מרחבי": _REGIME_SHARON_HOLON,
+    "הנגב": _REGIME_NEGEV,
+}
+
+# משטרי TENDER_REGIMES חלים על מטרופולין בלבד (ר' הערת המיפוי לעיל).
+METROPOLINE_REF = 15
+assert METROPOLINE_REF in OPERATORS and OPERATORS[METROPOLINE_REF] == "מטרופולין"
+
+UNMAPPED_REGIME_LABEL = "לא-ממופה"
 
 # ימי חול בישראל (Python weekday(): Mon=0 .. Sun=6) — ראשון עד חמישי
 WEEKDAY_WORK = frozenset({6, 0, 1, 2, 3})   # א, ב, ג, ד, ה
@@ -134,11 +392,21 @@ def fetch_planned(d: dt.date) -> dict[tuple[int, str], int]:
 
 
 # ---------- 2. בוצע (SIRI) לכל מפעיל-יום + 3. דה-דופ ----------
-def fetch_executed(op: int, d: dt.date) -> dict[str, int]:
-    """משיכת siri_rides במנות, דה-דופ לפי journey_ref. מחזיר line_ref -> נסיעות שבוצעו."""
+def fetch_executed(op: int, d: dt.date) -> tuple[dict[str, int], dict[str, list]]:
+    """
+    משיכת siri_rides במנות, דה-דופ לפי journey_ref.
+    מחזיר (line_ref -> נסיעות שבוצעו,
+           line_ref -> רשימה ממוינת של *כל* זמני scheduled_start_time
+           המקומיים הייחודיים שנצפו לקו).
+    רשימת הזמנים משמשת את is_low_frequency לסיווג 'קו בתדירות נמוכה' לפי
+    המרווח-העוקב המינימלי (זמנים כפולים של אותו קו מאוחדים — set; זמן
+    כפול אינו מרווח נצפה).
+    """
     t_from, t_to = utc_window(d)
+    off = 3 if is_idt(d) else 2
     seen_nonzero = set()        # journey_ref שלא מסתיים ב-0 — נספר פעם אחת
     counts = collections.Counter()  # line_ref -> count
+    times: dict[str, set] = collections.defaultdict(set)  # line_ref -> {מקומי}
     offset, limit = 0, 10000
     while True:
         r = SESSION.get(f"{API}/siri_rides/list", params={
@@ -154,6 +422,18 @@ def fetch_executed(op: int, d: dt.date) -> dict[str, int]:
         for row in rows:
             jr = str(row.get("journey_ref") or "")
             line = str(row.get("siri_route__line_ref"))
+            ts = row.get("scheduled_start_time")
+            if ts:
+                try:
+                    t = dt.datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+                except ValueError:
+                    t = None
+                if t is not None:
+                    if t.tzinfo is None:
+                        t = t.replace(tzinfo=dt.timezone.utc)
+                    local = (t.astimezone(dt.timezone.utc)
+                             + dt.timedelta(hours=off)).replace(tzinfo=None)
+                    times[line].add(local)
             if jr.endswith("-0"):
                 counts[line] += 1                 # כל שורה נספרת
             else:
@@ -164,7 +444,7 @@ def fetch_executed(op: int, d: dt.date) -> dict[str, int]:
         if len(rows) < limit:
             break
         offset += limit
-    return dict(counts)
+    return dict(counts), {line: sorted(ts) for line, ts in times.items()}
 
 
 # ---------- 4. הצלבה ברמת קו-יום ----------
@@ -236,16 +516,38 @@ def _strip_zeros(code: str) -> str:
     return s or "0"
 
 
-def load_clusters() -> dict[str, str]:
+def _parse_cluster_date(s: str) -> "dt.date | None":
+    """תאריך מ-ClusterToLine (DD/MM/YYYY; ISO כגיבוי). None אם לא פריק."""
+    s = (s or "").strip()
+    for fmt in ("%d/%m/%Y", "%Y-%m-%d"):
+        try:
+            return dt.datetime.strptime(s, fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def load_clusters(today: "dt.date | None" = None) -> dict[str, str]:
     """
     מוריד את ClusterToLine.zip ומחזיר מיפוי route_mkt(ללא אפסים מובילים) -> שם אשכול.
-    OfficeLineId הוא ה-route_mkt. רשומות פעילות בלבד (ToDate בעתיד).
+    OfficeLineId הוא ה-route_mkt.
+
+    סינון תוקף (ToDate): רשומה שפג תוקפה — ToDate לפני today — נזרקת,
+    כך שאינה תופסת ב-setdefault את מקומה של הרשומה הפעילה של אותו מק"ט.
+    ToDate בפורמט DD/MM/YYYY (רשומות פעילות נושאות 01/01/2200 בקובץ
+    הארצי). רשומה עם ToDate חסר או בלתי-פריק נשמרת — אין זריקה שקטה
+    בגלל שיבוש פורמט.
     """
+    if today is None:
+        today = dt.date.today()
     z = zipfile.ZipFile(io.BytesIO(_zip_bytes(CLUSTER_ZIP, "ClusterToLine.zip", 300)))
     name = z.namelist()[0]
     out: dict[str, str] = {}
     with z.open(name) as f:
         for row in csv.DictReader(io.TextIOWrapper(f, "utf-8-sig")):
+            to_date = _parse_cluster_date(row.get("ToDate"))
+            if to_date is not None and to_date < today:
+                continue                       # פג תוקף — נזרק
             mkt = _strip_zeros(row.get("OfficeLineId"))
             cluster = (row.get("ClusterName") or "").strip()
             if mkt and cluster:
@@ -352,6 +654,9 @@ class DayData:
         self.planned_raw: dict[tuple[int, str], int] = {}   # לפני קאפ כפל-תכנון
         self.planned: dict[tuple[int, str], int] = {}       # אחרי קאפ
         self.executed: dict[int, dict[str, int]] = {}       # op -> {line: בוצע}
+        # (op, line) -> רשימה ממוינת של זמני-יציאה מתוכננים מקומיים ייחודיים
+        # שנצפו ב-SIRI — לסיווג תדירות (is_low_frequency)
+        self.sched_times: dict[tuple[int, str], list] = {}
         self.calendar: DateClassification | None = None     # סיווג מלוח החגים
         self.classification = "תקין"                         # תקין/מופחת/חריג-ביצוע/לא-תקף/החרגה
         self.reason = ""
@@ -370,7 +675,11 @@ def fetch_day(d: dt.date, line_mkt: dict) -> DayData:
     day.planned_raw = fetch_planned(d)
     with ThreadPoolExecutor(max_workers=8) as ex:
         futs = {op: ex.submit(fetch_executed, op, d) for op in OPERATORS}
-        day.executed = {op: f.result() for op, f in futs.items()}
+        for op, f in futs.items():
+            counts, times = f.result()
+            day.executed[op] = counts
+            for line, tlist in times.items():
+                day.sched_times[(op, line)] = tlist
     return day
 
 
@@ -580,54 +889,179 @@ def aggregate_operator(days: list[DayData], recs: list[LineDayRecord]) -> dict:
     return {op: {**dict(out[op]), "valid_days": len(vdays[op])} for op in OPERATORS}
 
 
-# ---------- 2. חשיפת קנסות (נספח כ"ו) ----------
+# ---------- 2. חשיפת קנסות (נספח כ"ו) — מנוע פר-משטר-מכרז ----------
 class PenaltyRow:
-    __slots__ = ("date", "dow", "op", "op_name", "cluster",
+    __slots__ = ("date", "dow", "op", "op_name", "cluster", "regime",
                  "planned", "executed", "nonexec", "rate", "tariff",
-                 "exposure", "over_threshold", "fixed_penalty")
+                 "exposure", "components", "fixed_total", "total",
+                 "not_found", "over_threshold", "fixed_penalty")
 
     def __init__(self, **kw):
         for k in self.__slots__:
             setattr(self, k, kw.get(k))
 
 
+def _regime_line_components(regime: dict, line_recs: list,
+                            day: "DayData | None") -> tuple[list, list]:
+    """
+    רכיבי-הקנס ברמת קו-יום/נסיעה של משטר אחד, על רשומות קו של דלי
+    (יום, מפעיל, אשכול) אחד. מחזיר (components, notes):
+      components = [(תווית רכיב, סכום ₪)], notes = הערות-חישוב לשקיפות.
+
+    * flat_per_ride (24/2015, 07/2014): סכום קבוע × כל נסיעה שלא בוצעה —
+      ללא כלל 4.5%, ללא מדרג וללא מושג 'קו בתדירות נמוכה' במכרזים אלה.
+    * infrequent_ride (מכרזי 2021): קו בתדירות נמוכה (is_low_frequency)
+      מנותב לסעיף המחמיר — כל נסיעה שלא בוצעה בו × 5,000 ₪; הוא מוחרג
+      מהקנס הקבוע של קו רגיל.
+    * line_over_threshold (מכרזי 2021): קו רגיל שאי-הביצוע היומי שלו חצה
+      את סף המקור (4.5% ⇔ ביצוע<95.5%) — קנס קבוע לקו-יום.
+    * קו שתדירותו לא ניתנת לקביעה (is_low_frequency מחזיר None: אין
+      זמני-יציאה, זמנים חלקיים, או יציאות בחלון 00:00-03:59) מטופל
+      כקו רגיל ומדווח.
+    """
+    comps: list[tuple[str, int]] = []
+    notes: list[str] = []
+
+    flat = regime.get("flat_per_ride")
+    if flat:
+        n = sum(r.nonexec for r in line_recs)
+        if n > 0:
+            comps.append((f"{flat['label']} × {n}", n * flat["amount"]))
+
+    lot = regime.get("line_over_threshold")
+    infreq = regime.get("infrequent_ride")
+    if not (lot or infreq):
+        return comps, notes
+
+    times_map = day.sched_times if day is not None else {}
+    lf_rides = 0      # נסיעות שלא בוצעו בקווי תדירות-נמוכה
+    over_lines = 0    # קווי-יום רגילים שחצו את הסף
+    unknown = 0       # קווים שתדירותם לא ניתנת לקביעה
+    for r in line_recs:
+        if r.planned <= 0:
+            continue
+        lf = is_low_frequency(r.planned, times_map.get((r.op, r.line)))
+        if lf is True:
+            if infreq:
+                lf_rides += r.nonexec
+            continue      # קו בתדירות נמוכה מוחרג מהקנס הקבוע של קו רגיל
+        if lf is None:
+            unknown += 1  # מטופל כקו רגיל — נופל להמשך הבדיקה
+        if lot and r.nonexec / r.planned > lot["threshold"]:
+            over_lines += 1
+    if infreq and lf_rides > 0:
+        comps.append((f"{infreq['label']} × {lf_rides}", lf_rides * infreq["amount"]))
+    if lot and over_lines > 0:
+        comps.append((f"{lot['label']} × {over_lines} קווים", over_lines * lot["amount"]))
+    if unknown:
+        notes.append(f"{unknown} קווים שתדירותם לא ניתנת לקביעה "
+                     "(זמני-יציאה חסרים/חלקיים או יציאות 00:00-03:59) — טופלו כקו רגיל")
+    return comps, notes
+
+
 def compute_penalties(days: list[DayData], recs: list[LineDayRecord]) -> list[PenaltyRow]:
     """
-    חשיפה לכל מפעיל×אשכול×יום-חול-תקף: תעריף לפי שיעור אי-ביצוע יומי באשכול,
-    חשיפה = אי-בוצע × תעריף.
+    מנוע-קנסות פר-משטר-מכרז (TENDER_REGIMES) לכל מפעיל×אשכול×יום-חול-תקף.
 
-    הקנס הקבוע (5,000 ₪) נוטרל כאן זמנית: לפי נספח כ"ו הוא מוגדר ברמת
-    קו-יום ("אי ביצוע יומי בקו... 5,000 ₪ לכל יום" — מכרז 5/2021 עמ' 261)
-    ולא ברמת אשכול-יום, והתעריף שונה בין מכרזים. שדה fixed_penalty נשאר 0
-    עד מימוש פר-משטר-מכרז (ר' פסק נספח כ"ו 16.8). over_threshold ממשיך
-    לסמן חציית 4.5% לצורך הדגשה בדוח.
+    לכל דלי (יום, מפעיל, אשכול):
+      * המשטר נקבע לפי האשכול — אך רק לשורות מטרופולין (METROPOLINE_REF):
+        משטרי TENDER_REGIMES הם משטרי מכרזי מטרופולין, ולכן שורת מפעיל
+        אחר אינה מתומחרת לפיהם ומסומנת כמו לא-ממופה (עם נימוק משלה).
+        אשכול שאינו ממופה לאף משטר אינו מתומחר בשקט:
+        regime="לא-ממופה", הסכומים None (לא 0) והשורה מסומנת בדוח.
+      * רכיב מדורג (מכרזי 2021 בלבד — רכיב אשכולי מפורש במקור): תעריף-להפרה
+        לפי שיעור אי-הביצוע היומי באשכול; חשיפה מדורגת = אי-בוצע × תעריף.
+      * רכיבי קו-יום/נסיעה: ר' _regime_line_components (קו בתדירות נמוכה
+        מנותב לסעיף המחמיר; קו רגיל מעל הסף מקבל את הקנס הקבוע של המשטר;
+        מכרזים ישנים — סכום קבוע לכל נסיעה, ללא כלל 4.5%).
+      * רכיבים שסכומם לא נלכד במקור אינם מתומחרים ומסומנים ב-not_found.
+
+    הנתיב האשכולי הישן של קנס קבוע 5,000 ₪ לאשכול-יום נשאר מת:
+    fixed_penalty=0 תמיד. over_threshold ממשיך לסמן חציית 4.5% (הדגשה בלבד).
     מחריג ימים לא-תקפים ומפעילים בחריג-ביצוע נקודתי.
     """
     valid_dates = {d.date for d in days if d.valid and d.is_workday}
     strike = {(d.date, op) for d in days for op in d.strike_ops}
-    bucket: dict[tuple, collections.Counter] = collections.defaultdict(collections.Counter)
+    day_by_date = {d.date: d for d in days}
+    bucket: dict[tuple, list] = collections.defaultdict(list)
     dow = {d.date: HEB_DOW[d.dow] for d in days}
     for r in recs:
         if r.date not in valid_dates or (r.date, r.op) in strike:
             continue
-        b = bucket[(r.date, r.op, r.cluster)]
-        b["planned"] += r.planned; b["executed"] += r.executed; b["nonexec"] += r.nonexec
+        bucket[(r.date, r.op, r.cluster)].append(r)
 
     rows: list[PenaltyRow] = []
-    for (date_, op, cluster), b in sorted(bucket.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2])):
-        planned = b["planned"]
+    for (date_, op, cluster), rlist in sorted(bucket.items(), key=lambda kv: (kv[0][0], kv[0][1], kv[0][2])):
+        planned = sum(r.planned for r in rlist)
         if planned == 0:
             continue
-        rate = b["nonexec"] / planned
-        tariff = penalty_tariff(rate)
+        executed = sum(r.executed for r in rlist)
+        nonexec = sum(r.nonexec for r in rlist)
+        rate = nonexec / planned
         over = rate > CLUSTER_DAY_FIXED_THRESHOLD
+        base = dict(date=date_, dow=dow.get(date_, ""), op=op, op_name=OPERATORS.get(op, str(op)),
+                    cluster=cluster, planned=planned, executed=executed, nonexec=nonexec,
+                    rate=rate, over_threshold=over, fixed_penalty=0)  # הנתיב הישן מת
+
+        # שומר-מפעיל: משטרי TENDER_REGIMES הם משטרי מכרזי מטרופולין בלבד.
+        regime = TENDER_REGIMES.get(cluster) if op == METROPOLINE_REF else None
+        if regime is None:
+            if op != METROPOLINE_REF:
+                reason = (f"משטרי TENDER_REGIMES חלים על מטרופולין "
+                          f"(operator_ref {METROPOLINE_REF}) בלבד — שורת "
+                          f"{OPERATORS.get(op, op)} לא תומחרה")
+            else:
+                reason = "אשכול ללא משטר-מכרז ממופה — החשיפה לא תומחרה (אין לתמחר 0 בשקט)"
+            rows.append(PenaltyRow(
+                **base, regime=UNMAPPED_REGIME_LABEL,
+                tariff=None, exposure=None, components=[], fixed_total=None, total=None,
+                not_found=reason,
+            ))
+            continue
+
+        tariff = exposure = None
+        graded = regime.get("graded")
+        if graded:
+            tariff = tariff_from_table(rate, graded["table"])
+            exposure = nonexec * tariff
+        comps, notes = _regime_line_components(regime, rlist, day_by_date.get(date_))
+        fixed_total = sum(a for _, a in comps)
+        nf = list(regime.get("not_found", ())) + notes
+        if regime.get("trigger_note"):
+            nf.append(regime["trigger_note"])
         rows.append(PenaltyRow(
-            date=date_, dow=dow.get(date_, ""), op=op, op_name=OPERATORS[op], cluster=cluster,
-            planned=planned, executed=b["executed"], nonexec=b["nonexec"],
-            rate=rate, tariff=tariff, exposure=b["nonexec"] * tariff,
-            over_threshold=over, fixed_penalty=0,   # נוטרל — ר' docstring
+            **base, regime=regime["name"], tariff=tariff, exposure=exposure,
+            components=comps, fixed_total=fixed_total,
+            total=(exposure or 0) + fixed_total, not_found="; ".join(nf),
         ))
     return rows
+
+
+def summarize_penalties_by_cluster(rows: list[PenaltyRow]) -> list[dict]:
+    """
+    סיכום חשיפה פר-(אשכול, משטר): מתוכנן/אי-בוצע, חשיפה מדורגת, רכיבי
+    קו/נסיעה, סה"כ, ומניין שורות מפעיל-יום מעל 4.5%. המפתח כולל את המשטר
+    כי אותו אשכול יכול להופיע גם ממופה (שורות מטרופולין) וגם "לא-ממופה"
+    (שורות מפעיל אחר — שומר-המפעיל) — אסור לערבב אותם בשורת-סיכום אחת.
+    שורות לא-ממופות מסומנות priced=False — סכומיהן אינם 0 אלא "לא תומחר".
+    """
+    agg: dict[tuple, dict] = {}
+    for p in rows:
+        s = agg.setdefault((p.cluster, p.regime), {
+            "cluster": p.cluster, "regime": p.regime,
+            "planned": 0, "nonexec": 0, "exposure": 0, "fixed": 0, "total": 0,
+            "days_over": 0, "priced": p.regime != UNMAPPED_REGIME_LABEL,
+        })
+        s["planned"] += p.planned
+        s["nonexec"] += p.nonexec
+        if p.over_threshold:
+            s["days_over"] += 1
+        if s["priced"]:
+            s["exposure"] += p.exposure or 0
+            s["fixed"] += p.fixed_total or 0
+            s["total"] += p.total or 0
+    return sorted(agg.values(),
+                  key=lambda s: (not s["priced"], -(s["total"] if s["priced"] else s["nonexec"])))
 
 
 # ---------- 4. אי-דיוק — דגימת קו גדול ----------
@@ -826,42 +1260,97 @@ def build_workbook(week: tuple[dt.date, dt.date], days: list[DayData],
         rr += 1
     style_body(ws, 4, 6); autosize(ws, [22, 14, 14, 14, 10, 12])
 
-    # ---- גיליון 4: חשיפת קנסות ----
+    # ---- גיליון 4: חשיפת קנסות — פר-משטר-מכרז ----
     ws = new_sheet("חשיפת קנסות")
-    ws.merge_cells("A1:K1")
-    ws.cell(1, 1, "חשיפת קנסות לפי מפעיל×אשכול×יום (נספח כ\"ו, צמוד מדד 2/2012)").font = TITLE_FONT
-    headers = ["תאריך", "יום", "מפעיל", "אשכול", "מתוכנן", "אי-בוצע", "% אי-ביצוע",
-               "תעריף ₪/הפרה", "חשיפה משתנה ₪", "קנס קבוע ₪", "סה\"כ ₪"]
+    ws.merge_cells("A1:M1")
+    ws.cell(1, 1, "חשיפת קנסות לפי מפעיל×אשכול×יום — פר-משטר-מכרז "
+                  "(נספח כ\"ו; סכומים נומינליים, ללא הצמדת מדד 2/2012)").font = TITLE_FONT
+    headers = ["תאריך", "יום", "מפעיל", "אשכול", "משטר", "מתוכנן", "אי-בוצע",
+               "% אי-ביצוע", "תעריף מדורג ₪/הפרה", "חשיפה מדורגת ₪",
+               "רכיבי קו/נסיעה ₪", "סה\"כ ₪", "פירוט רכיבים / לא נמצא במקור"]
     header_row(ws, headers, row=3)
-    ws.cell(3, 10).comment = Comment(
-        "זמני — הקנס הקבוע ברמת קו-יום, ממתין למימוש פר-משטר-מכרז "
-        "(ר' פסק נספח כ\"ו 16.8)", "בקרה")
+    ws.cell(3, 5).comment = Comment(
+        "מנוע-קנסות פר-משטר-מכרז (TENDER_REGIMES): בקעת אונו אלעד=מכרז 5/2021; "
+        "שרון=מכרז 04/2021; שרון חולון מרחבי=מכרז 24/2015; הנגב=מכרז 07/2014. "
+        "המשטרים חלים על מטרופולין בלבד — שורת מפעיל אחר וכן אשכול אחר "
+        "מסומנים 'לא-ממופה' ואינם מתומחרים (לא 0 בשקט). "
+        "הנתיב האשכולי הישן של 5,000 ₪ נותר מנוטרל.", "בקרה")
+    NA = "—"
     rr = 4
     for p in penalties:
+        unmapped = p.regime == UNMAPPED_REGIME_LABEL
         ws.cell(rr, 1, p.date.isoformat()); ws.cell(rr, 2, p.dow).alignment = CENTER
         ws.cell(rr, 3, p.op_name); ws.cell(rr, 4, p.cluster)
-        ws.cell(rr, 5, p.planned).number_format = NUM
-        ws.cell(rr, 6, p.nonexec).number_format = NUM
-        ws.cell(rr, 7, f"=IF(E{rr}=0,0,F{rr}/E{rr})").number_format = PCT
-        ws.cell(rr, 8, p.tariff).number_format = SHK
-        ws.cell(rr, 9, f"=F{rr}*H{rr}").number_format = SHK
-        # זמני — הקנס הקבוע ברמת קו-יום, ממתין למימוש פר-משטר-מכרז
-        # (ר' פסק נספח כ"ו 16.8). הנתיב האשכולי נוטרל.
-        ws.cell(rr, 10, 0).number_format = SHK
-        ws.cell(rr, 11, f"=I{rr}+J{rr}").number_format = SHK
+        ws.cell(rr, 5, p.regime)
+        ws.cell(rr, 6, p.planned).number_format = NUM
+        ws.cell(rr, 7, p.nonexec).number_format = NUM
+        ws.cell(rr, 8, f"=IF(F{rr}=0,0,G{rr}/F{rr})").number_format = PCT
+        if p.tariff is None:
+            ws.cell(rr, 9, NA).alignment = CENTER
+            ws.cell(rr, 10, NA).alignment = CENTER
+        else:
+            ws.cell(rr, 9, p.tariff).number_format = SHK
+            ws.cell(rr, 10, f"=G{rr}*I{rr}").number_format = SHK
+        if unmapped:
+            ws.cell(rr, 11, NA).alignment = CENTER
+            ws.cell(rr, 12, "לא-ממופה").alignment = CENTER
+        else:
+            ws.cell(rr, 11, p.fixed_total).number_format = SHK   # K כערך
+            # סה"כ (L) = נוסחה על J+K; במשטר ללא מדרג J מכיל "—" ולכן =K בלבד
+            total_formula = f"=J{rr}+K{rr}" if p.tariff is not None else f"=K{rr}"
+            ws.cell(rr, 12, total_formula).number_format = SHK
+        detail = [f"{label}: {amount:,} ₪" for label, amount in (p.components or [])]
+        if p.not_found:
+            detail.append(p.not_found)
+        ws.cell(rr, 13, " | ".join(detail) or NA)
         if p.over_threshold:
-            for j in range(1, 12):
+            for j in range(1, 14):
                 ws.cell(rr, j).fill = BAD_FILL
+        elif unmapped:
+            for j in range(1, 14):
+                ws.cell(rr, j).fill = WARN_FILL
         rr += 1
     if rr > 4:
         last = rr - 1
-        ws.cell(rr, 4, "סך חשיפה").font = Font(name=ARIAL, bold=True)
-        ws.cell(rr, 9, f"=SUM(I4:I{last})").number_format = SHK
+        ws.cell(rr, 4, "סך חשיפה (משטרים ממופים בלבד)").font = Font(name=ARIAL, bold=True)
         ws.cell(rr, 10, f"=SUM(J4:J{last})").number_format = SHK
         ws.cell(rr, 11, f"=SUM(K4:K{last})").number_format = SHK
-        for j in range(1, 12):
+        ws.cell(rr, 12, f"=SUM(L4:L{last})").number_format = SHK
+        for j in range(1, 14):
             ws.cell(rr, j).fill = HDR_FILL; ws.cell(rr, j).font = Font(name=ARIAL, bold=True, color="FFFFFF")
-    style_body(ws, 4, 11); autosize(ws, [11, 5, 14, 20, 11, 11, 11, 13, 14, 12, 13])
+        rr += 1
+    style_body(ws, 4, 13)
+    autosize(ws, [11, 5, 14, 18, 26, 10, 10, 10, 13, 14, 14, 13, 60])
+
+    # סיכום פר-אשכול (rule: אשכול לא-ממופה מסומן, לא מתומחר 0 בשקט)
+    rr += 2
+    ws.cell(rr, 1, "סיכום חשיפה פר-אשכול").font = TITLE_FONT
+    rr += 1
+    sum_headers = ["אשכול", "משטר", "מתוכנן", "אי-בוצע", "חשיפה מדורגת ₪",
+                   "רכיבי קו/נסיעה ₪", "סה\"כ ₪", "שורות מפעיל-יום מעל 4.5%", "הערה"]
+    header_row(ws, sum_headers, row=rr)
+    first_sum = rr + 1
+    rr += 1
+    for s in summarize_penalties_by_cluster(penalties):
+        ws.cell(rr, 1, s["cluster"]); ws.cell(rr, 2, s["regime"])
+        ws.cell(rr, 3, s["planned"]).number_format = NUM
+        ws.cell(rr, 4, s["nonexec"]).number_format = NUM
+        if s["priced"]:
+            ws.cell(rr, 5, s["exposure"]).number_format = SHK
+            ws.cell(rr, 6, s["fixed"]).number_format = SHK
+            ws.cell(rr, 7, s["total"]).number_format = SHK
+            ws.cell(rr, 9, NA)
+        else:
+            ws.cell(rr, 5, NA).alignment = CENTER
+            ws.cell(rr, 6, NA).alignment = CENTER
+            ws.cell(rr, 7, NA).alignment = CENTER
+            ws.cell(rr, 9, "לא-ממופה — האשכול אינו משויך למשטר-מכרז, החשיפה לא תומחרה")
+            for j in range(1, 10):
+                ws.cell(rr, j).fill = WARN_FILL
+        ws.cell(rr, 8, s["days_over"]).alignment = CENTER
+        rr += 1
+    style_body(ws, first_sum, 9)
+    ws.freeze_panes = "A4"   # header_row של הסיכום מזיז את ההקפאה — החזרה לכותרת הפירוט
 
     # ---- גיליון 5: השוואת P95 ----
     ws = new_sheet("השוואת P95")
@@ -969,9 +1458,42 @@ def build_workbook(week: tuple[dt.date, dt.date], days: list[DayData],
         ("תקלת SIRI", "ביצוע נמוך חוצה-מפעילים + נפילת מצוק שעתית לאפס — סומן 'לא תקף', ללא אחוזים, הוחרג מהכול."),
         ("כפל תכנון GTFS", f"מתוכנן קו ≥ פי {DOUBLE_PLAN_RATIO} מחציון יום-חול — הוצב חציון (אחיד על כל ימי החול)."),
         ("ספי שירות", "אי-ביצוע > 2.1% חריגה משירות; > 2.5% הפרה יסודית; אי-דיוק > 4.5% חריגה."),
-        ("תעריפי קנס", "מדורג לפי שיעור יומי באשכול: 0/63/93/118/143/173 ₪ להפרה; +5,000 ₪ קבוע מעל 4.5%."),
+        ("קנסות — פר-משטר-מכרז",
+         "בקעת אונו אלעד (מכרז 5/2021) ושרון (מכרז 04/2021): מדרג אשכולי 0/63/93/118/143/173 ₪ להפרה "
+         "לפי שיעור אי-הביצוע היומי באשכול + קנס קו-יום לקו רגיל מעל 4.5% (אונו: 5,000 ₪ §2.2; "
+         "שרון: 500 ₪ לתקופת-יום §2.1 — חסם תחתון של תקופה אחת מתוך עד 3, באין פיצול תקופות בנתונים) "
+         "+ 5,000 ₪ לכל נסיעה שלא בוצעה בקו בתדירות נמוכה (§2.3/§2.2). "
+         "שרון חולון מרחבי (24/2015) והנגב (07/2014): 2,000 ₪ לכל נסיעה שלא בוצעה — "
+         "ללא כלל 4.5% וללא מדרג; לפני מקדם ההכפלה שנקב המפעיל (לא נמצא במקורות; מקדם ≥ 1 לא הוחל). "
+         "המשטרים חלים על אשכולות מטרופולין בלבד; שורת מפעיל אחר ואשכול לא-ממופה אינם מתומחרים "
+         "ומסומנים 'לא-ממופה'. הסכומים נומינליים, ללא הצמדת מדד 2/2012."),
+        ("משטרים ישנים — אופי החשיפה",
+         "במכרזי 24/2015 ו-07/2014 הטריגר החוזי לקנס הוא אירוע מתועד (דיווח פקח משרד התחבורה / "
+         "מוסמך מטעם המפקח / תלונת ציבור מוצדקת), לא בקרה אלקטרונית על כלל הנסיעות. "
+         "התמחור פר-נסיעת-SIRI שלא בוצעה הוא לכן תקרת-חשיפה תיאורטית, לא חסם תחתון."),
+        ("קו בתדירות נמוכה",
+         "קו שביום נתון 100% מנסיעותיו הן בתדירות 59 דק' ומעלה — כלומר המרווח-העוקב המינימלי "
+         "בין כל זוג נסיעות סמוכות (מזמני היציאה המתוכננים שנצפו ב-SIRI) ≥ 59 דק'; "
+         "קו עם נסיעה מתוכננת אחת ביום = תדירות נמוכה. כל נסיעותיו 'לא תדירות' — "
+         "מנותבות לסעיף המחמיר (5,000 ₪/נסיעה) במקום הקנס הקבוע של קו רגיל. "
+         "לא-ניתן-לקביעה (זמנים חסרים/חלקיים, או יציאות בחלון 00:00-03:59 שמעיד על זיהום "
+         "חלון ה-UTC היומי בזנבות יום-השירות הקודם/הבא) — הקו מטופל כקו רגיל ומדווח."),
+        ("רכיבים שלא תומחרו",
+         "רכיב שסכומו לא נלכד במקורות (למשל נסיעה-אחרונה בשרון, מקדמי ההכפלה במכרזים הישנים) "
+         "אינו מתומחר ומסומן בעמודת 'פירוט רכיבים / לא נמצא במקור'; רכיב שאינו מדיד מהנתונים "
+         "(איחור/הקדמה, נסיעה אחרונה, תלונות ציבור) מתועד ב-TENDER_REGIMES ואינו מתומחר — "
+         "לכן במשטרי 2021 (בקרה אלקטרונית) החשיפה המדווחת היא חסם תחתון; במשטרים הישנים "
+         "(24/2015, 07/2014) היא תקרת-חשיפה תיאורטית — ר' 'משטרים ישנים — אופי החשיפה'."),
         ("אי-דיוק", inaccuracy.get("detail", "")),
     ]
+    seen_regimes: set[str] = set()
+    for regime in TENDER_REGIMES.values():
+        if regime["name"] in seen_regimes:
+            continue
+        seen_regimes.add(regime["name"])
+        items = list(regime.get("not_found", [])) + list(regime.get("not_computable", []))
+        if items:
+            lines.append((f"לא תומחר — {regime['name']}", " · ".join(items)))
     rr = 3
     for k, v in lines:
         ws.cell(rr, 1, k).font = Font(name=ARIAL, bold=True, color="1F4E78")
