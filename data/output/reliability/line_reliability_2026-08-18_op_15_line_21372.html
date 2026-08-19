@@ -1,0 +1,196 @@
+<!doctype html>
+<html lang="he" dir="rtl">
+<head>
+  <meta charset="utf-8" />
+  <title>דוח אמינות קו</title>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; direction: rtl; }
+    table { border-collapse: collapse; width: 100%; margin-bottom: 24px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: right; }
+    th { background: #f3f3f3; }
+  </style>
+</head>
+<body>
+  <h1>דוח אמינות קו: תכנון מול ביצוע</h1>
+  <p>תאריך שירות: 2026-08-18 | מפעיל: 15 | מספר קו: 21</p>
+  <h2>KPI</h2>
+  <table><tr><th>planned_rides</th><td>32</td></tr><tr><th>actual_rides</th><td>32</td></tr><tr><th>matched_rides</th><td>30</td></tr><tr><th>missing_actual_start</th><td>0</td></tr><tr><th>null_gtfs_ride_id_rate</th><td>0.0625</td></tr></table>
+  <h2>בדיקות איכות לפני KPI</h2>
+  <table>
+    <tr><th>בדיקה</th><th>סטטוס</th><th>ערך</th><th>פירוט</th></tr>
+    <tr><th>line_identity</th><td>ok</td><td>line_ref=21372, route_mkt=27021, route_direction=2, route_alternative=#, candidate_rows=1</td><td>line_ref selected only after candidate set was unique.</td></tr><tr><th>date_time_window</th><td>warning</td><td>invalid=2; outside_date=0; outside_hours=0</td><td>Validates planned_start_time against service_date and requested hour window.</td></tr><tr><th>gtfs_ride_id_missing_rate</th><td>ok</td><td>2/32 (6.2%)</td><td>High missing gtfs_ride_id rate weakens planned-vs-actual matching. Threshold=25%.</td></tr><tr><th>siri_snapshots</th><td>warning</td><td>rows=20; statuses={'loaded': 12, 'pending': 7, 'loading': 1}; errors=0</td><td>Latest SIRI ETL snapshot metadata checked before KPI interpretation.</td></tr>
+  </table>
+  <h2>פירוט נסיעות</h2>
+  <table class="dataframe dataframe">
+  <thead>
+    <tr style="text-align: right;">
+      <th>planned_start_time</th>
+      <th>actual_start_time</th>
+      <th>gtfs_ride_id</th>
+    </tr>
+  </thead>
+  <tbody>
+    <tr>
+      <td>2026-08-18T03:09:00+00:00</td>
+      <td>2026-08-18T03:09:00+00:00</td>
+      <td>154248770.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T03:39:00+00:00</td>
+      <td>2026-08-18T03:39:00+00:00</td>
+      <td>154250651.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T04:10:00+00:00</td>
+      <td>2026-08-18T04:10:00+00:00</td>
+      <td>154247819.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T04:40:00+00:00</td>
+      <td>2026-08-18T04:40:00+00:00</td>
+      <td>154248767.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T05:22:00+00:00</td>
+      <td>2026-08-18T05:22:00+00:00</td>
+      <td>154249363.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T05:52:00+00:00</td>
+      <td>2026-08-18T05:52:00+00:00</td>
+      <td>154250654.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T06:21:00+00:00</td>
+      <td>2026-08-18T06:21:00+00:00</td>
+      <td>154250655.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T06:51:00+00:00</td>
+      <td>2026-08-18T06:51:00+00:00</td>
+      <td>154248768.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T07:25:00+00:00</td>
+      <td>2026-08-18T07:25:00+00:00</td>
+      <td>154250627.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T07:55:00+00:00</td>
+      <td>2026-08-18T07:55:00+00:00</td>
+      <td>154250628.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T08:26:00+00:00</td>
+      <td>2026-08-18T08:26:00+00:00</td>
+      <td>154250629.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T08:56:00+00:00</td>
+      <td>2026-08-18T08:56:00+00:00</td>
+      <td>154298088.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T09:24:00+00:00</td>
+      <td>2026-08-18T09:24:00+00:00</td>
+      <td>154249364.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T09:54:00+00:00</td>
+      <td>2026-08-18T09:54:00+00:00</td>
+      <td>154248771.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T10:20:00+00:00</td>
+      <td>2026-08-18T10:20:00+00:00</td>
+      <td>154248766.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T10:50:00+00:00</td>
+      <td>2026-08-18T10:50:00+00:00</td>
+      <td>154248769.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T11:21:00+00:00</td>
+      <td>2026-08-18T11:21:00+00:00</td>
+      <td>154298087.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T11:51:00+00:00</td>
+      <td>2026-08-18T11:51:00+00:00</td>
+      <td>154247820.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T12:18:00+00:00</td>
+      <td>2026-08-18T12:18:00+00:00</td>
+      <td>154250652.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T12:48:00+00:00</td>
+      <td>2026-08-18T12:48:00+00:00</td>
+      <td>154298089.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T13:18:00+00:00</td>
+      <td>2026-08-18T13:18:00+00:00</td>
+      <td>154251222.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T13:48:00+00:00</td>
+      <td>2026-08-18T13:48:00+00:00</td>
+      <td>154250653.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T14:18:00+00:00</td>
+      <td>2026-08-18T14:18:00+00:00</td>
+      <td>154250630.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T14:48:00+00:00</td>
+      <td>2026-08-18T14:48:00+00:00</td>
+      <td>154251220.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T15:18:00+00:00</td>
+      <td>2026-08-18T15:18:00+00:00</td>
+      <td>154298086.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T16:15:00+00:00</td>
+      <td>2026-08-18T16:15:00+00:00</td>
+      <td>154249366.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T16:48:00+00:00</td>
+      <td>2026-08-18T16:48:00+00:00</td>
+      <td>154248772.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T17:33:00+00:00</td>
+      <td>2026-08-18T17:33:00+00:00</td>
+      <td>154250631.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T18:18:00+00:00</td>
+      <td>2026-08-18T18:18:00+00:00</td>
+      <td>154249365.0</td>
+    </tr>
+    <tr>
+      <td>2026-08-18T19:03:00+00:00</td>
+      <td>2026-08-18T19:03:00+00:00</td>
+      <td>154250656.0</td>
+    </tr>
+    <tr>
+      <td>NaN</td>
+      <td>2026-08-18T03:17:00+00:00</td>
+      <td>NaN</td>
+    </tr>
+    <tr>
+      <td>NaN</td>
+      <td>2026-08-18T07:10:00+00:00</td>
+      <td>NaN</td>
+    </tr>
+  </tbody>
+</table>
+</body>
+</html>
