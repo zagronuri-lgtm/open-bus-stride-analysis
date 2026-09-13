@@ -32,3 +32,6 @@ outputs/
 .idea/
 .vscode/
 *.swp
+
+# --- Large reference downloads (the code fetches them itself; sha recorded in data/reference/MANIFEST.md) ---
+data/reference/israel-public-transportation.zip
