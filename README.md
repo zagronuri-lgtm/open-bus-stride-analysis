@@ -33,12 +33,10 @@ pytest
 
 ## יצירת קטלוג Endpoints
 
-הסקריפט מוריד את `openapi.json` החי של Open Bus Stride ומייצר שלושה קבצים:
+הסקריפט מוריד את `openapi.json` החי של Open Bus Stride ומייצר שלושה קבצים. למודול אין דגלים: הוא תמיד מושך מ-`https://open-bus-stride-api.hasadna.org.il/openapi.json` ותמיד כותב ל-`docs/` (דגלים בשורת הפקודה מתעלמים בשקט; URL או תיקייה אחרים רק דרך `build_catalog(openapi_url=..., output_dir=...)` מתוך פייתון). מועד המשיכה, ה-sha של המפרט והתצלום שלו נרשמים ב-`docs/endpoint_catalog_provenance.md`.
 
 ```bash
-python -m src.endpoint_catalog \
-  --openapi-url https://open-bus-stride-api.hasadna.org.il/openapi.json \
-  --output-dir docs
+python -m src.endpoint_catalog
 ```
 
 פלט צפוי:

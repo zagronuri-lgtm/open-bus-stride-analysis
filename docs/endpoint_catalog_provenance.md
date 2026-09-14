@@ -13,7 +13,7 @@ _נוסף 14.9.2026 (C-031 סבב 2, P3-3). הקטלוג (`endpoint_catalog.csv/
 | info.title / info.version | Open Bus Stride API / `6bda55d25d1b155383da485f09a607d086866a3f` |
 | מספר נתיבים (paths) | 27 |
 | תצלום שמור בריפו | `docs/openapi_snapshot_2026-09-14.json` (אותו sha) |
-| פקודת הייצור | `python -m src.endpoint_catalog --openapi-url https://open-bus-stride-api.hasadna.org.il/openapi.json --output-dir docs` |
+| פקודת הייצור | `python -m src.endpoint_catalog` **בלי דגלים.** למודול אין מפענח-ארגומנטים (`src/endpoint_catalog.py`, שורות 221-223: `build_catalog()` עם ברירות-המחדל); הוא **תמיד** מושך מה-URL החי למעלה ו**תמיד** כותב ל-`docs/`. דגלים כמו `--openapi-url`/`--output-dir` מתעלמים בשקט - אל תשתמש בהם. URL או תיקייה אחרים = רק דרך `build_catalog(openapi_url=..., output_dir=...)` מתוך פייתון; דגלים אמיתיים = שינוי קוד = שלב 2 באישור אורי |
 
 **הערה על הריצה של 13.9:** הקטלוג נוצר לראשונה ב-13.9 בלי תצלום. ב-14.9 הרצתי את הייצור מחדש מול המפרט החי ושמרתי תצלום: שלושת קובצי הקטלוג יצאו **זהים** (אין דיף בגיט), ושתי משיכות עוקבות של המפרט נתנו אותו sha - ולכן הקטלוג בגיט תואם למפרט שה-sha שלו רשום כאן.
 
