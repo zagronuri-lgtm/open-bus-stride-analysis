@@ -1,0 +1,10 @@
+{
+  "dataset_id": "5SfSMpRbQN",
+  "schedule_id": "sTcL7jQK5W",
+  "revision": "H_Mo1g-g4",
+  "sha256": "ab9f36ed253bc5fb<full sha256 of the exported template xlsx>",
+  "origin_schedule_id": "cE3qxw6skV",
+  "days": "1",
+  "exported_at": "2026-09-30T07:29:00+03:00",
+  "export_method": "UI: More actions > EXPORT > EXPORT TRIPS on the copy (built-in browser pane), file landed in ~/Downloads"
+}

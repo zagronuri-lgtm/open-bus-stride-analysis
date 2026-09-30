@@ -1,0 +1,16 @@
+<!doctype html>
+<html lang="he" dir="rtl"><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>גשר הכנה מקומי</title>
+<style>body{font:18px system-ui;max-width:850px;margin:40px auto;padding:20px;background:#f6f7fb;color:#172238}section{background:white;padding:22px;border:1px solid #ccd4e2;border-radius:12px;margin:20px 0}label{display:block;margin:14px 0}input,button{font:inherit;padding:8px;max-width:95%}button{cursor:pointer}pre{white-space:pre-wrap;overflow-wrap:anywhere}strong{color:#8b3700}</style>
+<h1>גשר הכנה מקומי</h1>
+<p><strong>הדגמה והכנה בלבד. לא הופעלו קלוד או אופטיבוס.</strong></p>
+<p>המנוע הנוכחי מפיק מועמדים. לא אומתו Days ותאריכי יעד, ואין כרגע registry אמיתי שמאשר שינוי. הדגמה זו משתמשת במקור סינתטי בלבד.</p>
+<section><h2>טעינת חבילה</h2><p>בחרו קובץ job מלא. מקור וראיות מגיעים רק מה־registry שבבעלות השרת. ה־CLI הוא הדרך המועדפת לחיבור כלים.</p>
+<label>קובץ JSON <input id="file" type="file" accept="application/json,.json"></label>
+<pre id="preview">לא נטען קובץ.</pre>
+<label>טוקן מקומי <input id="token" type="password" autocomplete="off" spellcheck="false"></label>
+<p>הטוקן מוחזק בזיכרון הדף בלבד ואינו נשמר או נרשם ביומן. יש לנקותו בסיום. אימות מקומי אינו הרשאת שינוי באופטיבוס.</p>
+<button id="submit" disabled>שליחה לתור הכנה</button> <button id="clear">ניקוי טוקן</button></section>
+<section><h2>מצב הכנה</h2><label>מזהה משימה <input id="job" dir="ltr" autocomplete="off"></label><button id="status">בדיקת מצב</button><pre id="result" aria-live="polite">טרם נשלחה חבילה.</pre>
+<p>blocked_adapter פירושו שהוכנה חבילה מקומית ונדרש מתאם. זה אינו אישור שהשינוי בוצע. failed פירושו שההכנה נכשלה. אין הרצה או אישור פעולה חיצונית בדף זה.</p></section>
+<script src="/demo.js"></script></html>

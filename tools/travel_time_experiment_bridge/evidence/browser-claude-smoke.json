@@ -1,0 +1,24 @@
+{
+  "checked_at": "2026-09-30",
+  "browser": "Chrome",
+  "local_preview": "http://127.0.0.1:8794/",
+  "file_sha256": "e6e14e1c2e2ff31e76a39738f117746eb3940d73e23c8331e675af3dfdc02eaf",
+  "canonical_digest": "fcc82810a689fa50b311b97043d691ad929fe94b426550692e48e989b7e9a10e",
+  "source_trip_count": 1592,
+  "selected_candidate_count": 2,
+  "changed_trip_count": 0,
+  "package_kind": "review_only",
+  "authorization": "none",
+  "claude_code_actual_call": true,
+  "claude_duration_ms": 19629,
+  "claude_reported_cost_usd": 0.034421,
+  "executed_optibus": false,
+  "iab_download_verified": false,
+  "public_site_updated": false,
+  "model_input_fields": [
+    "digest",
+    "trip_count",
+    "changed_count"
+  ],
+  "note": "CLI received only derived metadata, not trip data or recommendations. This verifies transport and response contract, not statistical review."
+}

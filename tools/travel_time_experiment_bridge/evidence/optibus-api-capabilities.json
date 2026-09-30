@@ -1,0 +1,104 @@
+{
+  "checked_at": "2026-09-30",
+  "source": "local optibus_openapi.json",
+  "sha256": "3345645f718741e54d28e2a6c82df5f8e4680ec5e736654428be3f466352dc8e",
+  "path_count": 30,
+  "paths": {
+    "/calendar/services": [
+      "GET"
+    ],
+    "/calendar/calendars": [
+      "GET"
+    ],
+    "/configurations/logos": [
+      "GET"
+    ],
+    "/deadhead-catalogs": [
+      "GET",
+      "POST"
+    ],
+    "/deadhead-catalogs/{catalogId}": [
+      "DELETE",
+      "GET"
+    ],
+    "/deadhead-catalogs/{catalogId}/trips": [
+      "GET",
+      "POST",
+      "PUT"
+    ],
+    "/deadhead-catalogs/{catalogId}/trips/replace": [
+      "POST"
+    ],
+    "/integrations/feeds/{id}": [
+      "GET"
+    ],
+    "/token": [
+      "POST"
+    ],
+    "/projects/{projectId}": [
+      "GET"
+    ],
+    "/projects/{projectId}/flex-zones": [
+      "GET"
+    ],
+    "/project/{projectId}/datasetProps": [
+      "GET"
+    ],
+    "/rosterSchedule/{scheduleId}": [
+      "GET"
+    ],
+    "/directions": [
+      "POST"
+    ],
+    "/schedule/operational": [
+      "GET"
+    ],
+    "/schedule/{scheduleId}": [
+      "GET"
+    ],
+    "/schedule/{scheduleId}/datasetRoutes": [
+      "GET"
+    ],
+    "/schedule/datasetRoutes": [
+      "POST"
+    ],
+    "/scheduleSet/{scheduleSetId}/schedules": [
+      "GET"
+    ],
+    "/timeplan/{timeplanId}": [
+      "GET"
+    ],
+    "/timeplan/routeGroups/{timeplanId}": [
+      "GET"
+    ],
+    "/timeplan/stops/{timeplanId}": [
+      "GET"
+    ],
+    "/timeplan/routes/{timeplanId}": [
+      "GET"
+    ],
+    "/timeplan/{timeplanId}/transfers": [
+      "GET"
+    ],
+    "/timeplan/{timeplanId}/route/{routeId}/timetable": [
+      "GET"
+    ],
+    "/timeplan/{timeplanId}/route/{routeId}/trips": [
+      "GET"
+    ],
+    "/timeplan/trips/{routeId}": [
+      "GET"
+    ],
+    "/timeplan/services/{timeplanId}": [
+      "GET"
+    ],
+    "/timeplan/vehicle_types/{timeplanId}": [
+      "GET"
+    ],
+    "/timeplan/{timeplanId}/flex-routes": [
+      "GET"
+    ]
+  },
+  "scope": "Presence in local specification only; absence does not prove product impossibility. No credentials or API calls.",
+  "map_write_endpoints_documented": false
+}

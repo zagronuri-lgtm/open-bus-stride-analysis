@@ -1,0 +1,21 @@
+{
+  "claude_adapter/prepare_update_trips.py": "654644e3da62219955f9c9f19216f50fefb7aadf640da891b81dcd2c206f3d37",
+  "claude_adapter/tests/test_council_regressions.py": "70d65e091cd4a6ca88a9657f14e0781a61fbd7dd53b9a261a77ea1474b4c6cd2",
+  "claude_adapter/tests/test_integration_regressions.py": "cee099bd566b764e40fe7ddb1988808a518861fa74fd9b1c3d1c4d0c010aa641",
+  "claude_adapter/tests/test_prepare.py": "d8cc09fe3dbd3acb657f61cf6651f24d3ff12d74db907b31c5b3861b8bde4213",
+  "implementation/bridge_contract.py": "25a4f94432cb42d9a8907d12ff8a6dd570e2733c984507909950e680ccd32f58",
+  "implementation/job_queue.py": "e6972e21cfd6feb80b2321145c76aaadd0fd3a111d8fc46119b590c1a002b51f",
+  "implementation/tests/test_bridge.py": "41c7d5769e859a48478dd5bd56d1dcaefdafd94796ba7784fa92fe32f570a69c",
+  "implementation/tests/test_queue_integrity.py": "b66bf26bcc6b9d0f5f62f8c7a435bc6b1c8b334f0f7966b6f3c0223b87c3ee5f",
+  "runner/claude_review.py": "efee83e71196af024efbf68fb994688d3671721ea415d720196f8dc0c3066e5e",
+  "runner/test_claude_review.py": "e6128be0f4eb892aa1fd02377c8d32691621eabbcbd735bc5d2e383b841569a1",
+  "service/demo.html": "648503b2466aa49b4f4e764116435f3c0a7d2aad5d0ed2b88f423fa750dd174c",
+  "service/demo.js": "950ee284d9cd3a79fc56b677f9cd113e92eacbce6e608144f785339e71625595",
+  "service/local_bridge.py": "597b34a9579f961e2b5c44775ae6a6ed382fea1ec5efacc4b3f18f60202f03bc",
+  "service/tests/test_service.py": "71d6d1b1cbdf9a31f2cff1a33336b37b047c516e0608491ba441381b9c421038",
+  "ui/experiment_review_package.js": "87802da5bd530147cbe8cc4c0daff9d98a02a2a8da101cf100074d72e8e47afa",
+  "ui/optibus_export_ui.js": "089f4b5a3fad1f25bbf5a333def9f378e3e4bf8239634ef1b7834572c75fb552",
+  "ui/optibus_update_trips.js": "6595663733cc9ed3fd8437ff3a3bf92a38f9bd5c95118a6a70882c9d2f63db4d",
+  "ui/tests/test_experiment_review_package.cjs": "85aafd358a49e102d699f95719d10f1ed0f009e846439abd4f342ea048e6cfb8",
+  "ui/tests/test_selected_trips.cjs": "392612ec247ad296c18b4643233d402402f3ec8c25c48474a7c2dd8400753854"
+}
